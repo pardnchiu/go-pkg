@@ -6,7 +6,7 @@
 
 ### http
 
-泛型 HTTP GET/POST，自動處理 JSON/XML 解碼。
+泛型 HTTP GET/POST/PUT/PATCH/DELETE，自動處理 JSON/XML 解碼。
 
 ```go
 import "github.com/pardnchiu/go-utils/http"
@@ -32,7 +32,7 @@ data, status, err := http.DELETE[MyStruct](ctx, nil, "https://api.example.com/da
 
 ### filesystem
 
-原子化檔案寫入（先寫 `.tmp` 再 rename）。
+原子化檔案寫入（自動建立目錄、先寫 `.tmp` 再 rename）。
 
 ```go
 import "github.com/pardnchiu/go-utils/filesystem"
