@@ -38,7 +38,10 @@ err := filesystem.WriteFile("/path/to/file.txt", "content", 0644)
 ```go
 import "github.com/pardnchiu/go-utils/filesystem/keychain"
 
-val := keychain.Get("MyApp", fallbackDir, "API_KEY")
-err := keychain.Set("MyApp", fallbackDir, "API_KEY", "secret")
-err := keychain.Delete("MyApp", fallbackDir, "API_KEY")
+// 初始化（sync.Once，僅首次生效）
+keychain.Init("MyApp", fallbackDir)
+
+val := keychain.Get("API_KEY")
+err := keychain.Set("API_KEY", "secret")
+err := keychain.Delete("API_KEY")
 ```
