@@ -10,28 +10,28 @@ import (
 	"github.com/pardnchiu/go-utils/filesystem"
 )
 
-func Set(fallbackPath, key, value string) error {
+func Set(service, fallbackPath, key, value string) error {
 	if value == "" {
 		return nil
 	}
 	switch runtime.GOOS {
 	case "darwin":
-		return setSecretOnMac(key, value)
+		return setSecretOnMac(service, key, value)
 	default:
-		if ok := setSecret(key, value); ok == nil {
+		if ok := setSecret(service, key, value); ok == nil {
 			return nil
 		}
 		return setFallback(fallbackPath, key, value)
 	}
 }
 
-func setSecretOnMac(key, value string) error {
+func setSecretOnMac(service, key, value string) error {
 	exec.Command("security", "delete-generic-password",
-		"-s", "ThreadsMarketing",
+		"-s", service,
 		"-a", key).Run()
 
 	cmd := exec.Command("security", "add-generic-password",
-		"-s", "ThreadsMarketing",
+		"-s", service,
 		"-a", key,
 		"-w", value)
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -40,10 +40,10 @@ func setSecretOnMac(key, value string) error {
 	return nil
 }
 
-func setSecret(key, value string) error {
+func setSecret(service, key, value string) error {
 	cmd := exec.Command("secret-tool", "store",
-		"--label", "ThreadsMarketing/"+key,
-		"service", "ThreadsMarketing", "account", key)
+		"--label", service+"/"+key,
+		"service", service, "account", key)
 	cmd.Stdin = strings.NewReader(value)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("secret-tool store: %s", out)

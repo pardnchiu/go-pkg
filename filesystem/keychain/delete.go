@@ -9,15 +9,15 @@ import (
 	"github.com/pardnchiu/go-utils/filesystem"
 )
 
-func Delete(fallbackPath, key string) error {
+func Delete(service, fallbackPath, key string) error {
 	switch runtime.GOOS {
 	case "darwin":
 		exec.Command("security", "delete-generic-password",
-			"-s", "ThreadsMarketing",
+			"-s", service,
 			"-a", key).Run()
 	default:
 		exec.Command("secret-tool", "clear",
-			"service", "ThreadsMarketing", "account", key).Run()
+			"service", service, "account", key).Run()
 		deleteFallback(fallbackPath, key)
 	}
 	return nil

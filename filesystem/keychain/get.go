@@ -8,28 +8,28 @@ import (
 	"strings"
 )
 
-func Get(fallbackPath, key string) string {
-	if val := readKeychain(fallbackPath, key); val != "" {
+func Get(service, fallbackPath, key string) string {
+	if val := readKeychain(service, fallbackPath, key); val != "" {
 		return val
 	}
 	return os.Getenv(key)
 }
 
-func readKeychain(fallbackPath, key string) string {
+func readKeychain(service, fallbackPath, key string) string {
 	switch runtime.GOOS {
 	case "darwin":
-		return getSecretFromMac(key)
+		return getSecretFromMac(service, key)
 	default:
-		if secret := getSecret(key); secret != "" {
+		if secret := getSecret(service, key); secret != "" {
 			return secret
 		}
 		return getFallback(fallbackPath, key)
 	}
 }
 
-func getSecretFromMac(key string) string {
+func getSecretFromMac(service, key string) string {
 	out, err := exec.Command("security", "find-generic-password",
-		"-s", "ThreadsMarketing",
+		"-s", service,
 		"-a", key,
 		"-w").Output()
 	if err != nil {
@@ -38,9 +38,9 @@ func getSecretFromMac(key string) string {
 	return strings.TrimSpace(string(out))
 }
 
-func getSecret(key string) string {
+func getSecret(service, key string) string {
 	out, err := exec.Command("secret-tool", "lookup",
-		"service", "ThreadsMarketing", "account", key).Output()
+		"service", service, "account", key).Output()
 	if err != nil {
 		return ""
 	}
