@@ -38,7 +38,7 @@ err := filesystem.WriteFile("/path/to/file.txt", "content", 0644)
 ```go
 import "github.com/pardnchiu/go-utils/filesystem/keychain"
 
-val := keychain.Get(fallbackDir, "API_KEY")
-err := keychain.Set(fallbackDir, "API_KEY", "secret")
-err := keychain.Delete(fallbackDir, "API_KEY")
+val := keychain.Get("MyApp", fallbackDir, "API_KEY")
+err := keychain.Set("MyApp", fallbackDir, "API_KEY", "secret")
+err := keychain.Delete("MyApp", fallbackDir, "API_KEY")
 ```
