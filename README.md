@@ -30,6 +30,26 @@ data, status, err := http.PATCH[MyStruct](ctx, nil, "https://api.example.com/dat
 data, status, err := http.DELETE[MyStruct](ctx, nil, "https://api.example.com/data", nil, body, "json")
 ```
 
+### database
+
+PostgreSQL 連線建構與 migration runner。
+
+`NewPostgresql` 從環境變數讀取預設值（`PG_DSN` / `PG_HOST` / `PG_PORT` / `PG_USER` / `PG_PASSWORD` / `PG_DATABASE` / `PG_SSLMODE`），`cfg` 非零欄位覆寫之。
+
+`PostgresqlMigrate` 遞迴掃描 `dir` 下所有 `.sql` 檔，以相對路徑為版本鍵排序執行，透過 `schema_migrations` 表確保冪等，每筆 migration 以 transaction 包裹。
+
+```go
+import (
+	_ "github.com/lib/pq"
+	"github.com/pardnchiu/go-utils/database"
+)
+
+db, _ := database.NewPostgresql(ctx, nil)
+defer db.Close()
+
+err := database.PostgresqlMigrate(ctx, db, "./migrations")
+```
+
 ### filesystem
 
 原子化檔案寫入（自動建立目錄、先寫 `.tmp` 再 rename）。
