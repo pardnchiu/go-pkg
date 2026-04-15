@@ -105,7 +105,8 @@ func Fetch(ctx context.Context, href string, opt *FetchOption) (*FetchResult, er
 	if err != nil {
 		return nil, err
 	}
-	b, err := ensureBrowser(o.UserAgent)
+
+	b, err := ensureBrowser(o.UserAgent, !hasDisplay())
 	if err != nil {
 		return nil, err
 	}
@@ -227,6 +228,13 @@ func load(ctx context.Context, b *rod.Browser, href string, parsed *url.URL, opt
 		return nil, fmt.Errorf("readability: %w", err)
 	}
 
+	lowTitle := strings.ToLower(strings.TrimSpace(article.Title))
+	for _, pat := range []string{"just a moment", "attention required", "checking your browser", "access denied", "請稍候"} {
+		if strings.Contains(lowTitle, pat) {
+			return nil, &FetchError{Status: 403, Href: href}
+		}
+	}
+
 	content := strings.TrimSpace(article.Content)
 	if content == "" {
 		content = htmlSrc
@@ -236,7 +244,7 @@ func load(ctx context.Context, b *rod.Browser, href string, parsed *url.URL, opt
 		return nil, fmt.Errorf("HTMLToMarkdown: %w", err)
 	}
 	if md == "" {
-		return nil, fmt.Errorf("empty content")
+		return nil, &FetchError{Status: 204, Href: href}
 	}
 	if opt.MaxLength > 0 && len(md) > opt.MaxLength {
 		md = md[:opt.MaxLength]

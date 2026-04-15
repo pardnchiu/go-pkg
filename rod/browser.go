@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
@@ -14,12 +15,40 @@ import (
 
 const DefaultUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
+type cachedBrowser struct {
+	b        *rod.Browser
+	lastUsed time.Time
+}
+
+const (
+	browserIdleTTL   = 5 * time.Minute
+	browserIdleCheck = 1 * time.Minute
+)
+
 var (
 	mu         sync.Mutex
-	browser    *rod.Browser
+	browser    *cachedBrowser
 	wsBrowsers = map[string]*rod.Browser{}
 	fetchSem   = make(chan struct{}, 8)
+	evictOnce  sync.Once
 )
+
+func startEvictor() {
+	evictOnce.Do(func() {
+		go func() {
+			t := time.NewTicker(browserIdleCheck)
+			defer t.Stop()
+			for range t.C {
+				mu.Lock()
+				if browser != nil && time.Since(browser.lastUsed) > browserIdleTTL {
+					_ = browser.b.Close()
+					browser = nil
+				}
+				mu.Unlock()
+			}
+		}()
+	})
+}
 
 func SetMaxConcurrency(n int) {
 	if n <= 0 {
@@ -45,11 +74,13 @@ func acquireSem(ctx context.Context) (func(), error) {
 	}
 }
 
-func ensureBrowser(userAgent string) (*rod.Browser, error) {
+func ensureBrowser(userAgent string, headless bool) (*rod.Browser, error) {
 	mu.Lock()
 	defer mu.Unlock()
+	startEvictor()
 	if browser != nil {
-		return browser, nil
+		browser.lastUsed = time.Now()
+		return browser.b, nil
 	}
 
 	if userAgent == "" {
@@ -57,12 +88,16 @@ func ensureBrowser(userAgent string) (*rod.Browser, error) {
 	}
 
 	l := launcher.New().
-		Headless(!hasDisplay()).
+		Headless(headless).
 		Set("disable-blink-features", "AutomationControlled").
 		Set("no-sandbox", "").
 		Set("disable-dev-shm-usage", "").
 		Set("window-size", "1280,960").
 		Set("user-agent", userAgent)
+
+	if !headless {
+		l = l.Set("window-position", "-32000,-32000")
+	}
 
 	if bin := chromePath(); bin != "" {
 		l = l.Bin(bin)
@@ -77,7 +112,7 @@ func ensureBrowser(userAgent string) (*rod.Browser, error) {
 	if err := b.Connect(); err != nil {
 		return nil, fmt.Errorf("browser.Connect: %w", err)
 	}
-	browser = b
+	browser = &cachedBrowser{b: b, lastUsed: time.Now()}
 	return b, nil
 }
 
@@ -108,7 +143,7 @@ func Close() {
 	mu.Lock()
 	defer mu.Unlock()
 	if browser != nil {
-		_ = browser.Close()
+		_ = browser.b.Close()
 		browser = nil
 	}
 	for url := range wsBrowsers {
