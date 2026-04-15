@@ -8,7 +8,7 @@ import (
 	"golang.org/x/net/html"
 )
 
-func HTMLToMarkdown(content, baseURL string) (string, error) {
+func HTMLToMarkdown(content, baseURL string, keepLinks bool) (string, error) {
 	node, err := html.Parse(strings.NewReader(content))
 	if err != nil {
 		return "", fmt.Errorf("html.Parse: %w", err)
@@ -35,7 +35,21 @@ func HTMLToMarkdown(content, baseURL string) (string, error) {
 			"input", "select", "textarea", "svg", "canvas", "video", "audio":
 			return
 
+		case "nav", "header", "footer", "aside":
+			if !keepLinks {
+				return
+			}
+			sb.WriteString("\n")
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				walk(c)
+			}
+			sb.WriteString("\n")
+			return
+
 		case "img":
+			if !keepLinks {
+				return
+			}
 			alt, imgURL := extractImage(n, baseURL)
 			if imgURL != "" {
 				fmt.Fprintf(&sb, "\n![%s](%s)\n", alt, imgURL)
@@ -87,6 +101,12 @@ func HTMLToMarkdown(content, baseURL string) (string, error) {
 			return
 
 		case "a":
+			if !keepLinks {
+				for c := n.FirstChild; c != nil; c = c.NextSibling {
+					walk(c)
+				}
+				return
+			}
 			linkHref := attrMap(n)["href"]
 			resolved := resolveLink(linkHref, baseURL)
 			var text strings.Builder

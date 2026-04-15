@@ -2,6 +2,7 @@ package rod
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"net/url"
 	"strings"
@@ -12,146 +13,246 @@ import (
 	readability "github.com/go-shiori/go-readability"
 )
 
-type Output int
+//go:embed embed/stealth.js
+var defaultStealthJS string
 
-const (
-	OutputMarkdown Output = iota
-	OutputText
-)
+//go:embed embed/listener.js
+var defaultListenerJS string
+
+type Viewport struct {
+	Width             int
+	Height            int
+	DeviceScaleFactor float64
+}
 
 type FetchOption struct {
 	Timeout   time.Duration
 	IdleWait  time.Duration
 	MaxLength int
 	UserAgent string
-	Output    Output
+	KeepLinks bool
+	StealthJS string
+	SettleJS  string
+	Viewport  *Viewport
+}
+
+type FetchResult struct {
+	Href        string
+	FinalURL    string
+	Markdown    string
+	Title       string
+	Author      string
+	PublishedAt string
+	Excerpt     string
+	Status      int
+}
+
+type FetchError struct {
+	Status int
+	Href   string
+}
+
+func (e *FetchError) Error() string {
+	return fmt.Sprintf("http %d: %s", e.Status, e.Href)
 }
 
 const (
 	defaultTimeout   = 30 * time.Second
 	defaultIdleWait  = 5 * time.Second
-	defaultMaxLength = 100 << 10
+	defaultMaxLength = 1 << 20
 )
 
-func Fetch(ctx context.Context, href string, opt *FetchOption) (string, error) {
-	if opt == nil {
-		opt = &FetchOption{}
+func prepareOpt(opt *FetchOption) *FetchOption {
+	o := FetchOption{}
+	if opt != nil {
+		o = *opt
 	}
-	timeout := opt.Timeout
-	if timeout == 0 {
-		timeout = defaultTimeout
+	if o.Timeout == 0 {
+		o.Timeout = defaultTimeout
 	}
-	idle := opt.IdleWait
-	if idle == 0 {
-		idle = defaultIdleWait
+	if o.IdleWait == 0 {
+		o.IdleWait = defaultIdleWait
 	}
-	maxLen := opt.MaxLength
-	if maxLen == 0 {
-		maxLen = defaultMaxLength
+	if o.MaxLength == 0 {
+		o.MaxLength = defaultMaxLength
 	}
-
-	parsed, err := url.Parse(href)
-	if err != nil {
-		return "", fmt.Errorf("url.Parse: %w", err)
+	if o.StealthJS == "" {
+		o.StealthJS = defaultStealthJS
 	}
-	if parsed.Scheme == "" || !strings.Contains(parsed.Hostname(), ".") {
-		return "", fmt.Errorf("invalid url: %s", href)
+	if o.SettleJS == "" {
+		o.SettleJS = defaultListenerJS
 	}
-
-	b, err := ensureBrowser(opt.UserAgent)
-	if err != nil {
-		return "", err
+	if o.Viewport == nil {
+		o.Viewport = &Viewport{Width: 1280, Height: 960}
 	}
-	return fetchWithBrowser(ctx, b, href, parsed, timeout, idle, maxLen, opt.Output)
+	return &o
 }
 
-func FetchWS(ctx context.Context, controlURL, href string, opt *FetchOption) (string, error) {
-	if opt == nil {
-		opt = &FetchOption{}
-	}
-	timeout := opt.Timeout
-	if timeout == 0 {
-		timeout = defaultTimeout
-	}
-	idle := opt.IdleWait
-	if idle == 0 {
-		idle = defaultIdleWait
-	}
-	maxLen := opt.MaxLength
-	if maxLen == 0 {
-		maxLen = defaultMaxLength
-	}
-
+func parseHref(href string) (*url.URL, error) {
 	parsed, err := url.Parse(href)
 	if err != nil {
-		return "", fmt.Errorf("url.Parse: %w", err)
+		return nil, fmt.Errorf("url.Parse: %w", err)
 	}
 	if parsed.Scheme == "" || !strings.Contains(parsed.Hostname(), ".") {
-		return "", fmt.Errorf("invalid url: %s", href)
+		return nil, fmt.Errorf("invalid url: %s", href)
 	}
+	return parsed, nil
+}
 
+func Fetch(ctx context.Context, href string, opt *FetchOption) (*FetchResult, error) {
+	o := prepareOpt(opt)
+	parsed, err := parseHref(href)
+	if err != nil {
+		return nil, err
+	}
+	b, err := ensureBrowser(o.UserAgent)
+	if err != nil {
+		return nil, err
+	}
+	return load(ctx, b, href, parsed, o)
+}
+
+func FetchWS(ctx context.Context, controlURL, href string, opt *FetchOption) (*FetchResult, error) {
+	o := prepareOpt(opt)
+	parsed, err := parseHref(href)
+	if err != nil {
+		return nil, err
+	}
 	b, err := ensureBrowserWS(controlURL)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	text, err := fetchWithBrowser(ctx, b, href, parsed, timeout, idle, maxLen, opt.Output)
+	r, err := load(ctx, b, href, parsed, o)
 	if err != nil && strings.Contains(err.Error(), "browser.Page") {
 		resetBrowserWS(controlURL)
 	}
-	return text, err
+	return r, err
 }
 
-func fetchWithBrowser(ctx context.Context, b *rod.Browser, href string, parsed *url.URL, timeout, idle time.Duration, maxLen int, output Output) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+func load(ctx context.Context, b *rod.Browser, href string, parsed *url.URL, opt *FetchOption) (*FetchResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, opt.Timeout)
 	defer cancel()
 
 	release, err := acquireSem(ctx)
 	if err != nil {
-		return "", fmt.Errorf("acquireSem: %w", err)
+		return nil, fmt.Errorf("acquireSem: %w", err)
 	}
 	defer release()
 
 	page, err := b.Page(proto.TargetCreateTarget{URL: "about:blank"})
 	if err != nil {
-		return "", fmt.Errorf("browser.Page: %w", err)
+		return nil, fmt.Errorf("browser.Page: %w", err)
 	}
 	defer func() { _ = page.Close() }()
 
 	page = page.Context(ctx)
+
+	if opt.Viewport != nil {
+		scale := opt.Viewport.DeviceScaleFactor
+		if scale == 0 {
+			scale = 1
+		}
+		if err := page.SetViewport(&proto.EmulationSetDeviceMetricsOverride{
+			Width:             opt.Viewport.Width,
+			Height:            opt.Viewport.Height,
+			DeviceScaleFactor: scale,
+		}); err != nil {
+			return nil, fmt.Errorf("page.SetViewport: %w", err)
+		}
+	}
+
+	if opt.StealthJS != "" {
+		if _, err := page.EvalOnNewDocument(opt.StealthJS); err != nil {
+			return nil, fmt.Errorf("page.EvalOnNewDocument: %w", err)
+		}
+	}
+
 	if err := page.Navigate(href); err != nil {
-		return "", fmt.Errorf("page.Navigate: %w", err)
+		return nil, fmt.Errorf("page.Navigate: %w", err)
 	}
 	if err := page.WaitLoad(); err != nil {
-		return "", fmt.Errorf("page.WaitLoad: %w", err)
+		return nil, fmt.Errorf("page.WaitLoad: %w", err)
 	}
-	_ = page.WaitIdle(idle)
+
+	finalURL := href
+	if info, err := page.Info(); err == nil && info.URL != "" {
+		finalURL = info.URL
+		if u, err := url.Parse(finalURL); err == nil {
+			code := func(s string) int {
+				for _, e := range []string{"404", "403"} {
+					if s == e {
+						return 400 + int(e[2]-'0')
+					}
+				}
+				return 0
+			}
+			for seg := range strings.SplitSeq(u.Path, "/") {
+				if c := code(seg); c != 0 {
+					return nil, &FetchError{Status: c, Href: href}
+				}
+			}
+			for _, vals := range u.Query() {
+				for _, v := range vals {
+					if c := code(v); c != 0 {
+						return nil, &FetchError{Status: c, Href: href}
+					}
+				}
+			}
+		}
+	}
+
+	status := 0
+	if v, err := page.Eval(`() => { const e = performance.getEntriesByType("navigation")[0]; return e ? e.responseStatus : 0 }`); err == nil {
+		status = v.Value.Int()
+		if status >= 400 {
+			return nil, &FetchError{Status: status, Href: href}
+		}
+	}
+
+	_ = page.WaitIdle(opt.IdleWait)
+
+	if opt.SettleJS != "" {
+		settleCtx, settleCancel := context.WithTimeout(ctx, opt.IdleWait)
+		_, _ = page.Context(settleCtx).Eval(opt.SettleJS)
+		settleCancel()
+	}
 
 	htmlSrc, err := page.HTML()
 	if err != nil {
-		return "", fmt.Errorf("page.HTML: %w", err)
+		return nil, fmt.Errorf("page.HTML: %w", err)
 	}
 
 	article, err := readability.FromReader(strings.NewReader(htmlSrc), parsed)
 	if err != nil {
-		return "", fmt.Errorf("readability: %w", err)
+		return nil, fmt.Errorf("readability: %w", err)
 	}
 
-	var text string
-	switch output {
-	case OutputText:
-		text = strings.TrimSpace(article.TextContent)
-	default:
-		md, err := HTMLToMarkdown(article.Content, href)
-		if err != nil {
-			return "", fmt.Errorf("HTMLToMarkdown: %w", err)
-		}
-		text = md
+	content := strings.TrimSpace(article.Content)
+	if content == "" {
+		content = htmlSrc
 	}
-	if text == "" {
-		return "", fmt.Errorf("empty content")
+	md, err := HTMLToMarkdown(content, href, opt.KeepLinks)
+	if err != nil {
+		return nil, fmt.Errorf("HTMLToMarkdown: %w", err)
 	}
-	if maxLen > 0 && len(text) > maxLen {
-		text = text[:maxLen]
+	if md == "" {
+		return nil, fmt.Errorf("empty content")
 	}
-	return text, nil
+	if opt.MaxLength > 0 && len(md) > opt.MaxLength {
+		md = md[:opt.MaxLength]
+	}
+
+	result := &FetchResult{
+		Href:     href,
+		FinalURL: finalURL,
+		Markdown: md,
+		Title:    article.Title,
+		Author:   article.Byline,
+		Excerpt:  article.Excerpt,
+		Status:   status,
+	}
+	if article.PublishedTime != nil {
+		result.PublishedAt = article.PublishedTime.Format(time.RFC3339)
+	}
+	return result, nil
 }
