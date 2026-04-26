@@ -121,7 +121,13 @@ out, err := rod.HTMLToMarkdown(htmlFragment, baseURL, true) // keepLinks=true
 
 ### filesystem
 
-原子化檔案寫入（自動建立目錄、先寫 `.tmp` 再 rename）。
+檔案系統工具集：
+
+- **原子寫入**：`WriteFile` / `WriteText` / `WriteJSON` / `Copy` 透過 `.tmp` + `os.Rename`
+- **目錄**：`CheckDir(path, create)` 檢查路徑是否為目錄（`create=true` 時不存在會以 `0755` 建立）；`ListFiles` / `ListDirs` 非遞迴列出名稱；`WalkFiles` 遞迴並回傳相對路徑（slash 分隔，跳過點開頭目錄）
+- **存在性**：`Exists` / `IsFile` / `IsDir` 統一處理 stat error；`IsEmpty` 區分目錄空與檔案 size=0
+- **讀寫**：`ReadText` / `WriteText` / `AppendText`；泛型 `ReadJSON[T]` / `WriteJSON`
+- **搬移**：`Move` 跨 device 自動 fallback 為 copy + remove；`Remove` 忽略不存在錯誤
 
 <details>
 <summary>範例</summary>
@@ -129,7 +135,36 @@ out, err := rod.HTMLToMarkdown(htmlFragment, baseURL, true) // keepLinks=true
 ```go
 import "github.com/pardnchiu/go-utils/filesystem"
 
+// 原子寫入
 err := filesystem.WriteFile("/path/to/file.txt", "content", 0644)
+err = filesystem.WriteText("/path/to/file.txt", "content")
+err = filesystem.AppendText("/path/to/log.txt", "line\n")
+
+// 目錄
+err = filesystem.CheckDir("/path/to/dir", true)         // 不存在則建立
+files, err := filesystem.ListFiles("/path/to/dir")      // 非遞迴
+dirs, err := filesystem.ListDirs("/path/to/dir")        // 非遞迴
+all, err := filesystem.WalkFiles("/path/to/root")       // 遞迴
+
+// 存在性
+ok := filesystem.Exists("/path/to/x")
+ok = filesystem.IsFile("/path/to/x")
+ok = filesystem.IsDir("/path/to/x")
+empty, err := filesystem.IsEmpty("/path/to/x")
+
+// 讀取
+content, err := filesystem.ReadText("/path/to/file.txt")
+
+// JSON
+type Config struct{ Host string }
+cfg, err := filesystem.ReadJSON[Config]("/path/to/cfg.json")
+err = filesystem.WriteJSON("/path/to/cfg.json", cfg, true)  // formatted
+err = filesystem.WriteJSON("/path/to/cfg.json", cfg, false) // compact
+
+// 搬移
+err = filesystem.Copy("/src", "/dst")
+err = filesystem.Move("/src", "/dst")               // 跨 device 自動 fallback
+err = filesystem.Remove("/path/to/x")
 ```
 
 </details>
