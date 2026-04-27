@@ -123,6 +123,7 @@ out, err := rod.HTMLToMarkdown(htmlFragment, baseURL, true) // keepLinks=true
 
 檔案系統工具集：
 
+- **Policy 注入**：`New(Policy{DeniedMap, ExcludeList})` 一次性注入 sandbox 規則（`sync.Once`），未注入時 `IsDenied` 永遠 `false`、`IsExcluded` 僅讀執行期 `.gitignore`，**不**回 error（既有 caller 零破壞）。`IsDenied` / `IsExcluded` / `RealPath` / `AbsPath(root, path, AbsPathOption{HomeOnly, NeedExclude})` 為 public 工具；`WriteFile` / `WriteText` / `WriteJSON` / `AppendText` / `Copy` / `Move` / `Remove` 自動套 `IsDenied`（read-side 不套）
 - **原子寫入**：`WriteFile` / `WriteText` / `WriteJSON` / `Copy` 透過 `.tmp` + `os.Rename`
 - **目錄**：`CheckDir(path, create)` 檢查路徑是否為目錄（`create=true` 時不存在會以 `0755` 建立）；`ListFiles` / `ListDirs` 非遞迴列出名稱；`WalkFiles` 遞迴並回傳相對路徑（slash 分隔，跳過點開頭目錄）
 - **存在性**：`Exists` / `IsFile` / `IsDir` 統一處理 stat error；`IsEmpty` 區分目錄空與檔案 size=0
@@ -135,8 +136,23 @@ out, err := rod.HTMLToMarkdown(htmlFragment, baseURL, true) // keepLinks=true
 ```go
 import "github.com/pardnchiu/go-utils/filesystem"
 
-// 原子寫入
-err := filesystem.WriteFile("/path/to/file.txt", "content", 0644)
+// Policy（optional，未呼叫則無 deny / exclude 限制）
+err := filesystem.New(filesystem.Policy{
+    DeniedMap:   deniedJSON,   // {"dirs":[...],"files":[...],"prefixes":[...],"extensions":[...]}
+    ExcludeList: excludeJSON,  // []string，gitignore-like patterns
+})
+
+// Sandbox 工具
+deny := filesystem.IsDenied("/etc/passwd")
+excl := filesystem.IsExcluded("/work/root", "/work/root/node_modules/x.js")
+real, err := filesystem.RealPath("/path/maybe/symlink")
+abs, err := filesystem.AbsPath("/work/root", "~/Desktop", filesystem.AbsPathOption{
+    HomeOnly:    true,
+    NeedExclude: false,
+})
+
+// 原子寫入（自動套 IsDenied）
+err = filesystem.WriteFile("/path/to/file.txt", "content", 0644)
 err = filesystem.WriteText("/path/to/file.txt", "content")
 err = filesystem.AppendText("/path/to/log.txt", "line\n")
 

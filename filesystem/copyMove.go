@@ -11,6 +11,10 @@ import (
 )
 
 func Copy(src, dst string) error {
+	if IsDenied(dst) {
+		return fmt.Errorf("access denied: %s", dst)
+	}
+
 	srcInfo, err := os.Stat(src)
 	if err != nil {
 		return fmt.Errorf("os.Stat: %w", err)
@@ -53,6 +57,10 @@ func Copy(src, dst string) error {
 }
 
 func Move(src, dst string) error {
+	if IsDenied(dst) {
+		return fmt.Errorf("access denied: %s", dst)
+	}
+
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 		return fmt.Errorf("os.MkdirAll: %w", err)
 	}
@@ -78,6 +86,10 @@ func Move(src, dst string) error {
 }
 
 func Remove(path string) error {
+	if IsDenied(path) {
+		return fmt.Errorf("access denied: %s", path)
+	}
+
 	err := os.Remove(path)
 	if err == nil || errors.Is(err, fs.ErrNotExist) {
 		return nil

@@ -19,6 +19,10 @@ func WriteText(path, content string) error {
 }
 
 func AppendText(path, content string) error {
+	if IsDenied(path) {
+		return fmt.Errorf("access denied: %s", path)
+	}
+
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return fmt.Errorf("os.MkdirAll: %w", err)
 	}

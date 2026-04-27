@@ -7,6 +7,10 @@ import (
 )
 
 func WriteFile(path, content string, permission os.FileMode) error {
+	if IsDenied(path) {
+		return fmt.Errorf("access denied: %s", path)
+	}
+
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("os.MkdirAll: %w", err)
