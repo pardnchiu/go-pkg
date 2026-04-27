@@ -18,6 +18,32 @@ func getListOption(opts []ListOption) ListOption {
 	return opts[len(opts)-1]
 }
 
+func ListAll(dir string, opts ...ListOption) ([]os.DirEntry, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("os.ReadDir: %w", err)
+	}
+
+	opt := getListOption(opts)
+	if !opt.SkipExcluded {
+		return entries, nil
+	}
+
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, fmt.Errorf("filepath.Abs: %w", err)
+	}
+
+	out := make([]os.DirEntry, 0, len(entries))
+	for _, e := range entries {
+		if IsExcluded(absDir, filepath.Join(absDir, e.Name())) {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}
+
 func ListFiles(dir string, opts ...ListOption) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
