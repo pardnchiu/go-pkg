@@ -64,7 +64,7 @@ err := database.PostgresqlMigrate(ctx, db, "./migrations")
 
 go-rod 打包：Chromium 抓取網頁，以 readability 擷取主文，輸出 `*FetchResult`（含 `Href` 原始網址 / `FinalURL` 轉址後最終網址 / `Markdown` / `Title` / `Author` / `PublishedAt` / `Excerpt` / `Status`）。內含 HTML→Markdown 轉換與跨平台 Chrome 偵測。另支援透過 `FetchWS` 連接既有 Chrome 的 remote debugging WebSocket（`--remote-debugging-port`），用於沿用使用者登入 session 的場景。`Fetch` / `FetchWS` 可併發呼叫，共用單一 browser 並各自開獨立 tab；全域併發上限預設 8，可透過 `SetMaxConcurrency(n)` 調整。
 
-內建 stealth.js 注入（抗爬蟲偵測）、3 秒 settle 等待（等動態內容穩定）、page-level viewport（預設 1280×960），均可透過 `FetchOption` 覆寫。`KeepLinks=false`（預設）為純文字模式，剝除 `nav` / `header` / `footer` / `aside` / `img` / `a`；`KeepLinks=true` 輸出完整 markdown。
+`Fetch` / `FetchWS` 將整體 timeout 提升為函式參數（caller 自填，傳 `0` 表示不套 timeout，僅吃 parent ctx）；其餘參數（`IdleWait` / `MaxLength` / `Viewport` 等）仍透過 `FetchOption` 覆寫。載入策略改為 `WaitDOMStable(IdleWait, 0.01)`：等 DOM 連續 `IdleWait` 秒內變動 ≤ 1% 即返回，不等網路 idle、不被 GA／廣告 beacon 拖住。內建 stealth.js 注入（抗爬蟲偵測）、page-level viewport（預設 1280×960）。`KeepLinks=false`（預設）為純文字模式，剝除 `nav` / `header` / `footer` / `aside` / `img` / `a`；`KeepLinks=true` 輸出完整 markdown。
 
 `Fetch` 依環境自動選模式：有 display 時使用 headful（視窗以 off-screen position 隱藏），無 display 時使用 headless。Browser instance 常駐複用，閒置 5 分鐘自動關閉釋放資源。`FetchWS` 行為不變。
 
@@ -78,11 +78,11 @@ import "github.com/pardnchiu/go-utils/rod"
 
 defer rod.Close()
 
-result, err := rod.Fetch(ctx, "https://example.com/article", nil)
+result, err := rod.Fetch(ctx, "https://example.com/article", 30*time.Second, nil)
 // result.Href / result.FinalURL / result.Title / result.Author / result.PublishedAt / result.Excerpt / result.Status / result.Markdown
 
 // 連接既有 Chrome（需以 --remote-debugging-port=9222 啟動，見下方）
-result, err = rod.FetchWS(ctx, "http://127.0.0.1:9222", "https://example.com/article", nil)
+result, err = rod.FetchWS(ctx, "http://127.0.0.1:9222", "https://example.com/article", 30*time.Second, nil)
 ```
 
 **以 remote debugging 啟動 Chrome**
@@ -100,8 +100,8 @@ google-chrome \
 ```
 
 ```go
-result, err := rod.Fetch(ctx, "https://example.com/article", &rod.FetchOption{
-	Timeout:   20 * time.Second,
+result, err := rod.Fetch(ctx, "https://example.com/article", 20*time.Second, &rod.FetchOption{
+	IdleWait:  2 * time.Second,
 	MaxLength: 50 << 10,
 	KeepLinks: true,
 	Viewport:  &rod.Viewport{Width: 1920, Height: 1080, DeviceScaleFactor: 1},

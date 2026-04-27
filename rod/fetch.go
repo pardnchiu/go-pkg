@@ -26,7 +26,6 @@ type Viewport struct {
 }
 
 type FetchOption struct {
-	Timeout   time.Duration
 	IdleWait  time.Duration
 	MaxLength int
 	UserAgent string
@@ -57,8 +56,7 @@ func (e *FetchError) Error() string {
 }
 
 const (
-	defaultTimeout   = 30 * time.Second
-	defaultIdleWait  = 5 * time.Second
+	defaultIdleWait  = 2 * time.Second
 	defaultMaxLength = 1 << 20
 )
 
@@ -66,9 +64,6 @@ func prepareOpt(opt *FetchOption) *FetchOption {
 	o := FetchOption{}
 	if opt != nil {
 		o = *opt
-	}
-	if o.Timeout == 0 {
-		o.Timeout = defaultTimeout
 	}
 	if o.IdleWait == 0 {
 		o.IdleWait = defaultIdleWait
@@ -99,7 +94,7 @@ func parseHref(href string) (*url.URL, error) {
 	return parsed, nil
 }
 
-func Fetch(ctx context.Context, href string, opt *FetchOption) (*FetchResult, error) {
+func Fetch(ctx context.Context, href string, timeout time.Duration, opt *FetchOption) (*FetchResult, error) {
 	o := prepareOpt(opt)
 	parsed, err := parseHref(href)
 	if err != nil {
@@ -110,10 +105,10 @@ func Fetch(ctx context.Context, href string, opt *FetchOption) (*FetchResult, er
 	if err != nil {
 		return nil, err
 	}
-	return load(ctx, b, href, parsed, o)
+	return load(ctx, b, href, parsed, timeout, o)
 }
 
-func FetchWS(ctx context.Context, controlURL, href string, opt *FetchOption) (*FetchResult, error) {
+func FetchWS(ctx context.Context, controlURL, href string, timeout time.Duration, opt *FetchOption) (*FetchResult, error) {
 	o := prepareOpt(opt)
 	parsed, err := parseHref(href)
 	if err != nil {
@@ -123,16 +118,19 @@ func FetchWS(ctx context.Context, controlURL, href string, opt *FetchOption) (*F
 	if err != nil {
 		return nil, err
 	}
-	r, err := load(ctx, b, href, parsed, o)
+	r, err := load(ctx, b, href, parsed, timeout, o)
 	if err != nil && strings.Contains(err.Error(), "browser.Page") {
 		resetBrowserWS(controlURL)
 	}
 	return r, err
 }
 
-func load(ctx context.Context, b *rod.Browser, href string, parsed *url.URL, opt *FetchOption) (*FetchResult, error) {
-	ctx, cancel := context.WithTimeout(ctx, opt.Timeout)
-	defer cancel()
+func load(ctx context.Context, b *rod.Browser, href string, parsed *url.URL, timeout time.Duration, opt *FetchOption) (*FetchResult, error) {
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
 
 	release, err := acquireSem(ctx)
 	if err != nil {
@@ -210,7 +208,7 @@ func load(ctx context.Context, b *rod.Browser, href string, parsed *url.URL, opt
 		}
 	}
 
-	_ = page.WaitIdle(opt.IdleWait)
+	_ = page.WaitDOMStable(opt.IdleWait, 0.01)
 
 	if opt.SettleJS != "" {
 		settleCtx, settleCancel := context.WithTimeout(ctx, opt.IdleWait)
