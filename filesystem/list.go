@@ -8,8 +8,9 @@ import (
 )
 
 type ListOption struct {
-	SkipExcluded    bool
-	IgnoreWalkError bool
+	SkipExcluded      bool
+	IgnoreWalkError   bool
+	IncludeNonRegular bool
 }
 
 func getListOption(opts []ListOption) ListOption {
@@ -62,7 +63,10 @@ func ListFiles(dir string, opts ...ListOption) ([]string, error) {
 
 	files := make([]string, 0, len(entries))
 	for _, e := range entries {
-		if !e.Type().IsRegular() {
+		if e.IsDir() {
+			continue
+		}
+		if !opt.IncludeNonRegular && !e.Type().IsRegular() {
 			continue
 		}
 		if opt.SkipExcluded && IsExcluded(absDir, filepath.Join(absDir, e.Name())) {
@@ -138,7 +142,7 @@ func WalkFiles(root string, opts ...ListOption) ([]string, error) {
 			}
 			return nil
 		}
-		if !entry.Type().IsRegular() {
+		if !opt.IncludeNonRegular && !entry.Type().IsRegular() {
 			return nil
 		}
 		if opt.SkipExcluded {

@@ -125,7 +125,7 @@ out, err := rod.HTMLToMarkdown(htmlFragment, baseURL, true) // keepLinks=true
 
 - **Policy 注入**：`New(Policy{DeniedMap, ExcludeList})` 一次性注入 sandbox 規則（`sync.Once`），未注入時 `IsDenied` 永遠 `false`、`IsExcluded` 僅讀執行期 `.gitignore`，**不**回 error（既有 caller 零破壞）。`IsDenied` / `IsExcluded` / `RealPath` / `AbsPath(root, path, AbsPathOption{HomeOnly, NeedExclude})` 為 public 工具；`WriteFile` / `WriteText` / `WriteJSON` / `AppendText` / `Copy` / `Move` / `Remove` 自動套 `IsDenied`（read-side 不套）
 - **原子寫入**：`WriteFile` / `WriteText` / `WriteJSON` / `Copy` 透過 `.tmp` + `os.Rename`
-- **目錄**：`CheckDir(path, create)` 檢查路徑是否為目錄（`create=true` 時不存在會以 `0755` 建立）；`ListFiles` / `ListDirs` 非遞迴列出名稱（僅 regular file / dir，**不**收 symlink／device／socket）；`ListAll` 非遞迴回 `[]os.DirEntry`（全 type 不過濾，caller 自行分類）；`WalkFiles` 遞迴並回傳相對路徑（slash 分隔，跳過點開頭目錄）。四者皆接受 variadic `ListOption{SkipExcluded, IgnoreWalkError bool}`：`SkipExcluded=true` 時依 `IsExcluded` 過濾命中項，Walk 對命中目錄回 `filepath.SkipDir`；`IgnoreWalkError=true` 僅作用於 `WalkFiles`，callback 收到 walker 傳入的 err 時跳過該節點而不 abort 整個 walk
+- **目錄**：`CheckDir(path, create)` 檢查路徑是否為目錄（`create=true` 時不存在會以 `0755` 建立）；`ListFiles` / `ListDirs` 非遞迴列出名稱（僅 regular file / dir，**不**收 symlink／device／socket）；`ListAll` 非遞迴回 `[]os.DirEntry`（全 type 不過濾，caller 自行分類）；`WalkFiles` 遞迴並回傳相對路徑（slash 分隔，跳過點開頭目錄）。四者皆接受 variadic `ListOption{SkipExcluded, IgnoreWalkError, IncludeNonRegular bool}`：`SkipExcluded=true` 時依 `IsExcluded` 過濾命中項，Walk 對命中目錄回 `filepath.SkipDir`；`IgnoreWalkError=true` 僅作用於 `WalkFiles`，callback 收到 walker 傳入的 err 時跳過該節點而不 abort 整個 walk；`IncludeNonRegular=true` 僅作用於 `ListFiles` 與 `WalkFiles`，放寬 `IsRegular()` 限制以收錄 symlink／device／socket／pipe
 - **存在性**：`Exists` / `IsFile` / `IsDir` 統一處理 stat error；`IsEmpty` 區分目錄空與檔案 size=0
 - **讀寫**：`ReadText` / `WriteText` / `AppendText`；泛型 `ReadJSON[T]` / `WriteJSON`
 - **搬移**：`Move` 跨 device 自動 fallback 為 copy + remove；`Remove` 忽略不存在錯誤
@@ -174,6 +174,10 @@ all, err = filesystem.WalkFiles("/work", filesystem.ListOption{
     SkipExcluded:    true,
     IgnoreWalkError: true,
 })
+
+// 收錄 symlink／device／socket／pipe（僅 ListFiles 與 WalkFiles）
+files, err = filesystem.ListFiles("/work", filesystem.ListOption{IncludeNonRegular: true})
+all, err = filesystem.WalkFiles("/work", filesystem.ListOption{IncludeNonRegular: true})
 
 // 存在性
 ok := filesystem.Exists("/path/to/x")
