@@ -8,7 +8,8 @@ import (
 )
 
 type ListOption struct {
-	SkipExcluded bool
+	SkipExcluded    bool
+	IgnoreWalkError bool
 }
 
 func getListOption(opts []ListOption) ListOption {
@@ -114,6 +115,9 @@ func WalkFiles(root string, opts ...ListOption) ([]string, error) {
 	var files []string
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
+			if opt.IgnoreWalkError {
+				return nil
+			}
 			return err
 		}
 		if path == root {
