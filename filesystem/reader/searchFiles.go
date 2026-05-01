@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/pardnchiu/go-utils/filesystem"
+	"github.com/pardnchiu/go-pkg/filesystem"
 )
 
 var binaryExts = map[string]bool{

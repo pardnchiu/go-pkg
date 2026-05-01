@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/pardnchiu/go-utils/filesystem"
+	"github.com/pardnchiu/go-pkg/filesystem"
 )
 
 func WalkFiles(root string, opts ...ListOption) ([]string, error) {

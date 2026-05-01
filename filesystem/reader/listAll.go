@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/pardnchiu/go-utils/filesystem"
+	"github.com/pardnchiu/go-pkg/filesystem"
 )
 
 func ListAll(dir string, opts ...ListOption) ([]os.DirEntry, error) {

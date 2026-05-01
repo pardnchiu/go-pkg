@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/pardnchiu/go-utils/filesystem"
+	"github.com/pardnchiu/go-pkg/filesystem"
 )
 
 func ListDirs(dir string, opts ...ListOption) ([]string, error) {

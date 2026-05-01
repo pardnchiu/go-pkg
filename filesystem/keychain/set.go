@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/pardnchiu/go-utils/filesystem"
+	"github.com/pardnchiu/go-pkg/filesystem"
 )
 
 func Set(key, value string) error {

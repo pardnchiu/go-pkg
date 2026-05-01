@@ -1,4 +1,4 @@
-module github.com/pardnchiu/go-utils
+module github.com/pardnchiu/go-pkg
 
 go 1.25.0
 
