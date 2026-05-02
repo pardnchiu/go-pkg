@@ -23,7 +23,17 @@ var binaryExts = map[string]bool{
 	".a":     true,
 }
 
-func SearchFiles(root, namePattern string, filePatterns []string, maxSize int64, opts ...ListOption) ([]string, error) {
+type File struct {
+	Path    string `json:"path"`
+	Matches []Line `json:"matches"`
+}
+
+type Line struct {
+	Line int    `json:"line"`
+	Text string `json:"text"`
+}
+
+func SearchFiles(root, namePattern string, filePatterns []string, maxSize int64, opts ...ListOption) ([]File, error) {
 	regex, err := regexp.Compile(namePattern)
 	if err != nil {
 		return nil, fmt.Errorf("regexp.Compile: %w", err)
@@ -43,7 +53,7 @@ func SearchFiles(root, namePattern string, filePatterns []string, maxSize int64,
 		absRoot = abs
 	}
 
-	var matches []string
+	var results []File
 	err = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			if opt.IgnoreWalkError {
@@ -124,15 +134,21 @@ func SearchFiles(root, namePattern string, filePatterns []string, maxSize int64,
 			return nil
 		}
 
+		var matches []Line
 		scanner := bufio.NewScanner(bytes.NewReader(data))
 		scanner.Buffer(make([]byte, 0, 64*1024), len(data))
+		lineNum := 0
 		for scanner.Scan() {
-			if regex.MatchString(scanner.Text()) {
-				matches = append(matches, path)
-				break
+			lineNum++
+			line := scanner.Text()
+			if regex.MatchString(line) {
+				matches = append(matches, Line{Line: lineNum, Text: line})
 			}
+		}
+		if len(matches) > 0 {
+			results = append(results, File{Path: path, Matches: matches})
 		}
 		return nil
 	})
-	return matches, err
+	return results, err
 }

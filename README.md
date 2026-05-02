@@ -193,7 +193,7 @@ err = filesystem.Remove("/path/to/x")
 | `ListAll(dir, opts...)` | 非遞迴 `[]os.DirEntry`，全 type 不過濾 |
 | `WalkFiles(root, opts...)` | 遞迴 slash 相對路徑，跳過 dot-prefix 目錄 |
 | `GlobFiles(root, pattern)` | 支援 `**` 遞迴；入口 `filepath.Match` 驗 pattern，malformed 即冒 `ErrBadPattern` |
-| `SearchFiles(root, regex, filePatterns, maxSize, opts...)` | regex 內容搜尋，回檔案級命中清單；`maxSize <= 0` fallback 為 1MB；自動跳 binary ext 與 dot-prefix |
+| `SearchFiles(root, regex, filePatterns, maxSize, opts...)` | regex 內容搜尋，回 `[]File{Path, Matches []Line{Line, Text}}`；`maxSize <= 0` fallback 為 1MB；自動跳 binary ext 與 dot-prefix |
 
 <details>
 <summary>範例</summary>
@@ -227,9 +227,12 @@ files, err = reader.ListFiles("/work", reader.ListOption{IncludeNonRegular: true
 // Glob（** 遞迴）
 matches, err := reader.GlobFiles("/work", "**/*.go")
 
-// regex 內容搜尋（每檔首匹配即 break）
+// regex 內容搜尋（每檔收集所有命中行）
 hits, err := reader.SearchFiles("/work", `TODO\(.*\)`, []string{"**/*.go"}, 0,
     reader.ListOption{SkipExcluded: true})
+for _, h := range hits {
+    // h.Path / h.Matches[i].Line / h.Matches[i].Text
+}
 ```
 
 </details>
