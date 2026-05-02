@@ -8,7 +8,7 @@ import (
 	"github.com/pardnchiu/go-pkg/filesystem"
 )
 
-func ListDirs(dir string, opts ...ListOption) ([]string, error) {
+func ListDirs(dir string, opts ...ListOption) ([]File, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("os.ReadDir: %w", err)
@@ -23,7 +23,7 @@ func ListDirs(dir string, opts ...ListOption) ([]string, error) {
 		}
 	}
 
-	dirs := make([]string, 0, len(entries))
+	dirs := make([]File, 0, len(entries))
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -31,7 +31,11 @@ func ListDirs(dir string, opts ...ListOption) ([]string, error) {
 		if opt.SkipExcluded && filesystem.IsExcluded(absDir, filepath.Join(absDir, e.Name())) {
 			continue
 		}
-		dirs = append(dirs, e.Name())
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		dirs = append(dirs, newFile(filepath.Join(dir, e.Name()), info))
 	}
 	return dirs, nil
 }

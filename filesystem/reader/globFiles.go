@@ -20,8 +20,11 @@ func GlobFiles(root, namePattern string) ([]File, error) {
 		}
 	}
 
-	var paths []string
 	if slices.Contains(parts, "**") {
+		absRoot, err := filepath.Abs(root)
+		if err != nil {
+			return nil, fmt.Errorf("filepath.Abs: %w", err)
+		}
 		walked, err := WalkFiles(root, ListOption{
 			SkipExcluded:      true,
 			IgnoreWalkError:   true,
@@ -30,23 +33,27 @@ func GlobFiles(root, namePattern string) ([]File, error) {
 		if err != nil {
 			return nil, fmt.Errorf("WalkFiles: %w", err)
 		}
-		for _, path := range walked {
-			walkedParts := strings.Split(path, "/")
+		files := make([]File, 0, len(walked))
+		for _, f := range walked {
+			rel, err := filepath.Rel(absRoot, f.Path)
+			if err != nil {
+				continue
+			}
+			walkedParts := strings.Split(filepath.ToSlash(rel), "/")
 			if !isMatch(parts, walkedParts) {
 				continue
 			}
-			paths = append(paths, filepath.Join(root, path))
+			files = append(files, f)
 		}
-	} else {
-		matches, err := filepath.Glob(filepath.Join(root, namePattern))
-		if err != nil {
-			return nil, fmt.Errorf("filepath.Glob: %w", err)
-		}
-		paths = matches
+		return files, nil
 	}
 
-	files := make([]File, 0, len(paths))
-	for _, full := range paths {
+	matches, err := filepath.Glob(filepath.Join(root, namePattern))
+	if err != nil {
+		return nil, fmt.Errorf("filepath.Glob: %w", err)
+	}
+	files := make([]File, 0, len(matches))
+	for _, full := range matches {
 		info, err := os.Stat(full)
 		if err != nil {
 			continue

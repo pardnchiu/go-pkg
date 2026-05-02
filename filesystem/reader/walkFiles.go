@@ -9,7 +9,7 @@ import (
 	"github.com/pardnchiu/go-pkg/filesystem"
 )
 
-func WalkFiles(root string, opts ...ListOption) ([]string, error) {
+func WalkFiles(root string, opts ...ListOption) ([]File, error) {
 	opt := getListOption(opts)
 	var absRoot string
 	if opt.SkipExcluded {
@@ -20,7 +20,7 @@ func WalkFiles(root string, opts ...ListOption) ([]string, error) {
 		absRoot = abs
 	}
 
-	var files []string
+	var files []File
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			if opt.IgnoreWalkError {
@@ -59,12 +59,14 @@ func WalkFiles(root string, opts ...ListOption) ([]string, error) {
 			}
 		}
 
-		rel, err := filepath.Rel(root, path)
+		info, err := entry.Info()
 		if err != nil {
-			return fmt.Errorf("filepath.Rel: %w", err)
+			if opt.IgnoreWalkError {
+				return nil
+			}
+			return fmt.Errorf("entry.Info: %w", err)
 		}
-
-		files = append(files, filepath.ToSlash(rel))
+		files = append(files, newFile(path, info))
 
 		return nil
 	})

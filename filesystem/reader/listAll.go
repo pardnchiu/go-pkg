@@ -8,28 +8,31 @@ import (
 	"github.com/pardnchiu/go-pkg/filesystem"
 )
 
-func ListAll(dir string, opts ...ListOption) ([]os.DirEntry, error) {
+func ListAll(dir string, opts ...ListOption) ([]File, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("os.ReadDir: %w", err)
 	}
 
 	opt := getListOption(opts)
-	if !opt.SkipExcluded {
-		return entries, nil
+	var absDir string
+	if opt.SkipExcluded {
+		absDir, err = filepath.Abs(dir)
+		if err != nil {
+			return nil, fmt.Errorf("filepath.Abs: %w", err)
+		}
 	}
 
-	absDir, err := filepath.Abs(dir)
-	if err != nil {
-		return nil, fmt.Errorf("filepath.Abs: %w", err)
-	}
-
-	out := make([]os.DirEntry, 0, len(entries))
+	out := make([]File, 0, len(entries))
 	for _, e := range entries {
-		if filesystem.IsExcluded(absDir, filepath.Join(absDir, e.Name())) {
+		if opt.SkipExcluded && filesystem.IsExcluded(absDir, filepath.Join(absDir, e.Name())) {
 			continue
 		}
-		out = append(out, e)
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		out = append(out, newFile(filepath.Join(dir, e.Name()), info))
 	}
 	return out, nil
 }
