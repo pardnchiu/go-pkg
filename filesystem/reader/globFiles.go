@@ -2,12 +2,13 @@ package reader
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 )
 
-func GlobFiles(root, namePattern string) ([]string, error) {
+func GlobFiles(root, namePattern string) ([]File, error) {
 	parts := strings.Split(namePattern, "/")
 
 	for _, p := range parts {
@@ -19,6 +20,7 @@ func GlobFiles(root, namePattern string) ([]string, error) {
 		}
 	}
 
+	var paths []string
 	if slices.Contains(parts, "**") {
 		walked, err := WalkFiles(root, ListOption{
 			SkipExcluded:      true,
@@ -28,23 +30,30 @@ func GlobFiles(root, namePattern string) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("WalkFiles: %w", err)
 		}
-
-		var matches []string
 		for _, path := range walked {
 			walkedParts := strings.Split(path, "/")
 			if !isMatch(parts, walkedParts) {
 				continue
 			}
-			matches = append(matches, filepath.Join(root, path))
+			paths = append(paths, filepath.Join(root, path))
 		}
-		return matches, nil
+	} else {
+		matches, err := filepath.Glob(filepath.Join(root, namePattern))
+		if err != nil {
+			return nil, fmt.Errorf("filepath.Glob: %w", err)
+		}
+		paths = matches
 	}
 
-	matches, err := filepath.Glob(filepath.Join(root, namePattern))
-	if err != nil {
-		return nil, fmt.Errorf("filepath.Glob: %w", err)
+	files := make([]File, 0, len(paths))
+	for _, full := range paths {
+		info, err := os.Stat(full)
+		if err != nil {
+			continue
+		}
+		files = append(files, newFile(full, info))
 	}
-	return matches, nil
+	return files, nil
 }
 
 func isMatch(patterns, parts []string) bool {

@@ -188,11 +188,11 @@ err = filesystem.Remove("/path/to/x")
 |---|---|
 | `Exists` / `IsFile` / `IsDir` | 包 stat 回 bool |
 | `IsEmpty(path)` | 區分目錄空（`Readdirnames(1)` EOF）與檔案 size=0 |
-| `ListFiles(dir, opts...)` | 非遞迴名稱，僅 regular file |
+| `ListFiles(dir, opts...)` | 非遞迴 `[]FileMeta{Name, Path, IsDir, Size, ModTime}`，僅 regular file |
 | `ListDirs(dir, opts...)` | 非遞迴名稱，僅 dir |
 | `ListAll(dir, opts...)` | 非遞迴 `[]os.DirEntry`，全 type 不過濾 |
 | `WalkFiles(root, opts...)` | 遞迴 slash 相對路徑，跳過 dot-prefix 目錄 |
-| `GlobFiles(root, pattern)` | 支援 `**` 遞迴；入口 `filepath.Match` 驗 pattern，malformed 即冒 `ErrBadPattern` |
+| `GlobFiles(root, pattern)` | 支援 `**` 遞迴，回 `[]FileMeta`；入口 `filepath.Match` 驗 pattern，malformed 即冒 `ErrBadPattern` |
 | `SearchFiles(root, regex, filePatterns, maxSize, opts...)` | regex 內容搜尋，回 `[]File{Path, Matches []Line{Line, Text}}`；`maxSize <= 0` fallback 為 1MB；自動跳 binary ext 與 dot-prefix |
 
 <details>
@@ -208,7 +208,7 @@ ok = reader.IsDir("/path/to/x")
 empty, err := reader.IsEmpty("/path/to/x")
 
 // 列舉（非遞迴）
-files, err := reader.ListFiles("/path/to/dir")
+files, err := reader.ListFiles("/path/to/dir") // []FileMeta{Name, Path, IsDir, Size, ModTime}
 dirs, err := reader.ListDirs("/path/to/dir")
 entries, err := reader.ListAll("/path/to/dir")
 
@@ -224,7 +224,7 @@ all, err = reader.WalkFiles("/work", reader.ListOption{
 // 收錄 symlink／device／socket／pipe
 files, err = reader.ListFiles("/work", reader.ListOption{IncludeNonRegular: true})
 
-// Glob（** 遞迴）
+// Glob（** 遞迴；回 []FileMeta）
 matches, err := reader.GlobFiles("/work", "**/*.go")
 
 // regex 內容搜尋（每檔收集所有命中行）

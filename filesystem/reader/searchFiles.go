@@ -23,16 +23,6 @@ var binaryExts = map[string]bool{
 	".a":     true,
 }
 
-type File struct {
-	Path    string `json:"path"`
-	Matches []Line `json:"matches"`
-}
-
-type Line struct {
-	Line int    `json:"line"`
-	Text string `json:"text"`
-}
-
 func SearchFiles(root, namePattern string, filePatterns []string, maxSize int64, opts ...ListOption) ([]File, error) {
 	regex, err := regexp.Compile(namePattern)
 	if err != nil {
@@ -146,7 +136,9 @@ func SearchFiles(root, namePattern string, filePatterns []string, maxSize int64,
 			}
 		}
 		if len(matches) > 0 {
-			results = append(results, File{Path: path, Matches: matches})
+			f := newFile(path, info)
+			f.Matches = matches
+			results = append(results, f)
 		}
 		return nil
 	})
