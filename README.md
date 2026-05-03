@@ -342,6 +342,52 @@ out, err := cmd.CombinedOutput()
 
 </details>
 
+### tui
+
+`tview` / `tcell` primitive 統一構造器。每個 `New*` 函式吃 `*<Config>` + optional `*Border`，`border != nil` 時自動 `SetBorder(true)` 並以 `" %s "` 包裹標題後套用 `SetTitleAlign`。`BindFocusBorder` 對任何實作 `SetBorderColor` / `SetFocusFunc` / `SetBlurFunc` 的 primitive 綁定「焦點 → 黃框、失焦 → 白框」，不符合介面者靜默跳過。
+
+| API | 行為 |
+|---|---|
+| `NewImage(*Image, *Border)` | 包裝 `tview.NewImage`；`AspectRatio > 0` 才呼叫 `SetAspectRatio` |
+| `NewInputField(*InputField, *Border)` | 包裝 `tview.NewInputField`；label / placeholder / mask 一次設完 |
+| `NewList(*List, *Border)` | 包裝 `tview.NewList`；主／副文字色與 secondary 顯示開關 |
+| `NewTextView(*TextView, *Border)` | 包裝 `tview.NewTextView`；scroll / wrap / dynamic colors / regions / max lines |
+| `BindFocusBorder(views ...tview.Primitive)` | 多型 primitive 綁定 focus / blur 邊框色 |
+
+<details>
+<summary>範例</summary>
+
+```go
+import (
+    "github.com/gdamore/tcell/v2"
+    "github.com/pardnchiu/go-pkg/tui"
+    "github.com/rivo/tview"
+)
+
+input := tui.NewInputField(&tui.InputField{
+    Label:           "Search: ",
+    LabelColor:      tcell.ColorWhite,
+    FieldWidth:      40,
+    PlaceholderText: "type something...",
+}, &tui.Border{Title: "Filter", TitleAlign: tview.AlignLeft})
+
+list := tui.NewList(&tui.List{
+    MainTextColor:     tcell.ColorWhite,
+    ShowSecondaryText: false,
+}, &tui.Border{Title: "Items"})
+
+text := tui.NewTextView(&tui.TextView{
+    Scrollable:    true,
+    Wrap:          true,
+    DynamicColors: true,
+}, nil)
+
+// 焦點切換時自動換邊框顏色（黃 ↔ 白）
+tui.BindFocusBorder(input, list, text)
+```
+
+</details>
+
 ### utils
 
 通用小工具。`UUID()` 產生 RFC 4122 v4 UUID。`GetWithDefault` / `GetWithDefaultInt` / `GetWithDefaultFloat` 讀取環境變數並於未設定、空字串或解析失敗時回傳預設值。
