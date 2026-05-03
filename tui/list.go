@@ -9,17 +9,14 @@ type List struct {
 	MainTextColor      tcell.Color
 	ShowSecondaryText  bool
 	SecondaryTextColor tcell.Color
+	Border             *Border
 }
 
-func NewList(config *List, border *Border) *tview.List {
+func NewList(config *List) *tview.List {
 	view := tview.NewList().
 		ShowSecondaryText(config.ShowSecondaryText).
 		SetMainTextColor(config.MainTextColor).
 		SetSecondaryTextColor(config.SecondaryTextColor)
-	if border != nil {
-		view.SetBorder(true).
-			SetTitle(" " + border.Title + " ").
-			SetTitleAlign(border.TitleAlign)
-	}
+	applyBorder(view, config.Border)
 	return view
 }

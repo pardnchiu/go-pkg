@@ -15,9 +15,10 @@ type Image struct {
 	AspectRatio     float64
 	AlignVertical   int
 	AlignHorizontal int
+	Border          *Border
 }
 
-func NewImage(config *Image, border *Border) *tview.Image {
+func NewImage(config *Image) *tview.Image {
 	view := tview.NewImage().
 		SetImage(config.Image).
 		SetSize(config.Rows, config.Columns).
@@ -27,10 +28,6 @@ func NewImage(config *Image, border *Border) *tview.Image {
 	if config.AspectRatio > 0 {
 		view.SetAspectRatio(config.AspectRatio)
 	}
-	if border != nil {
-		view.SetBorder(true).
-			SetTitle(" " + border.Title + " ").
-			SetTitleAlign(border.TitleAlign)
-	}
+	applyBorder(view, config.Border)
 	return view
 }

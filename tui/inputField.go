@@ -15,9 +15,12 @@ type InputField struct {
 	PlaceholderText      string
 	PlaceholderTextColor tcell.Color
 	MaskCharacter        rune
+	DoneFunc             func(key tcell.Key)
+	InputCapture         func(event *tcell.EventKey) *tcell.EventKey
+	Border               *Border
 }
 
-func NewInputField(config *InputField, border *Border) *tview.InputField {
+func NewInputField(config *InputField) *tview.InputField {
 	view := tview.NewInputField().
 		SetLabel(config.Label).
 		SetLabelWidth(config.LabelWidth).
@@ -28,10 +31,12 @@ func NewInputField(config *InputField, border *Border) *tview.InputField {
 		SetPlaceholder(config.PlaceholderText).
 		SetPlaceholderTextColor(config.PlaceholderTextColor).
 		SetMaskCharacter(config.MaskCharacter)
-	if border != nil {
-		view.SetBorder(true).
-			SetTitle(" " + border.Title + " ").
-			SetTitleAlign(border.TitleAlign)
+	if config.DoneFunc != nil {
+		view.SetDoneFunc(config.DoneFunc)
 	}
+	if config.InputCapture != nil {
+		view.SetInputCapture(config.InputCapture)
+	}
+	applyBorder(view, config.Border)
 	return view
 }

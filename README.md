@@ -344,15 +344,14 @@ out, err := cmd.CombinedOutput()
 
 ### tui
 
-`tview` / `tcell` primitive 統一構造器。每個 `New*` 函式吃 `*<Config>` + optional `*Border`，`border != nil` 時自動 `SetBorder(true)` 並以 `" %s "` 包裹標題後套用 `SetTitleAlign`。`BindFocusBorder` 對任何實作 `SetBorderColor` / `SetFocusFunc` / `SetBlurFunc` 的 primitive 綁定「焦點 → 黃框、失焦 → 白框」，不符合介面者靜默跳過。
+`tview` / `tcell` primitive 統一構造器。每個 `New*` 函式只吃 `*<Config>`，所有 optional 行為（含邊框與焦點切換）皆透過 config nil-able 欄位表達。`Border` 非 nil 時自動 `SetBorder(true)`、以 `" %s "` 包裹標題；`Border.FocusColor` / `Color` 任一非零即綁定焦點切換（focus → `FocusColor`、blur → `Color`、初始套 `Color`；任一未設則 fallback `ColorYellow` / `ColorWhite`）。
 
 | API | 行為 |
 |---|---|
-| `NewImage(*Image, *Border)` | 包裝 `tview.NewImage`；`AspectRatio > 0` 才呼叫 `SetAspectRatio` |
-| `NewInputField(*InputField, *Border)` | 包裝 `tview.NewInputField`；label / placeholder / mask 一次設完 |
-| `NewList(*List, *Border)` | 包裝 `tview.NewList`；主／副文字色與 secondary 顯示開關 |
-| `NewTextView(*TextView, *Border)` | 包裝 `tview.NewTextView`；scroll / wrap / dynamic colors / regions / max lines |
-| `BindFocusBorder(views ...tview.Primitive)` | 多型 primitive 綁定 focus / blur 邊框色 |
+| `NewImage(*Image)` | 包裝 `tview.NewImage`；`AspectRatio > 0` 才呼叫 `SetAspectRatio` |
+| `NewInputField(*InputField)` | 包裝 `tview.NewInputField`；label / placeholder / mask 一次設完；可選 `DoneFunc` / `InputCapture` |
+| `NewList(*List)` | 包裝 `tview.NewList`；主／副文字色與 secondary 顯示開關 |
+| `NewTextView(*TextView)` | 包裝 `tview.NewTextView`；scroll / wrap / dynamic colors / regions / max lines |
 
 <details>
 <summary>範例</summary>
@@ -369,21 +368,25 @@ input := tui.NewInputField(&tui.InputField{
     LabelColor:      tcell.ColorWhite,
     FieldWidth:      40,
     PlaceholderText: "type something...",
-}, &tui.Border{Title: "Filter", TitleAlign: tview.AlignLeft})
+    Border: &tui.Border{
+        Title:      "Filter",
+        TitleAlign: tview.AlignLeft,
+        FocusColor: tcell.ColorYellow,
+        Color:      tcell.ColorWhite,
+    },
+})
 
 list := tui.NewList(&tui.List{
     MainTextColor:     tcell.ColorWhite,
     ShowSecondaryText: false,
-}, &tui.Border{Title: "Items"})
+    Border:            &tui.Border{Title: "Items"}, // 純標題、無焦點切換
+})
 
 text := tui.NewTextView(&tui.TextView{
     Scrollable:    true,
     Wrap:          true,
     DynamicColors: true,
-}, nil)
-
-// 焦點切換時自動換邊框顏色（黃 ↔ 白）
-tui.BindFocusBorder(input, list, text)
+})
 ```
 
 </details>

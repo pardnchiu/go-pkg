@@ -14,9 +14,10 @@ type TextView struct {
 	DynamicColors bool
 	Regions       bool
 	MaxLines      int
+	Border        *Border
 }
 
-func NewTextView(config *TextView, border *Border) *tview.TextView {
+func NewTextView(config *TextView) *tview.TextView {
 	view := tview.NewTextView().
 		SetScrollable(config.Scrollable).
 		SetWrap(config.Wrap).
@@ -26,10 +27,6 @@ func NewTextView(config *TextView, border *Border) *tview.TextView {
 		SetMaxLines(config.MaxLines).
 		SetTextAlign(config.TextAlign).
 		SetTextColor(config.TextColor)
-	if border != nil {
-		view.SetBorder(true).
-			SetTitle(" " + border.Title + " ").
-			SetTitleAlign(border.TitleAlign)
-	}
+	applyBorder(view, config.Border)
 	return view
 }
