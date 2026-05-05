@@ -6,7 +6,7 @@
 
 ### http
 
-泛型 HTTP GET/POST/PUT/PATCH/DELETE，自動處理 JSON/XML 解碼。
+泛型 HTTP GET/POST/PUT/PATCH/DELETE，自動處理 JSON/XML 解碼。Stream 變體（`*Stream`）回傳原始 `*http.Response`，供需要讀 response header（如 `Mcp-Session-Id`）或串流 body（SSE / chunked）的場景使用。
 
 <details>
 <summary>範例</summary>
@@ -31,6 +31,26 @@ data, status, err := http.PATCH[MyStruct](ctx, nil, "https://api.example.com/dat
 
 // DELETE
 data, status, err := http.DELETE[MyStruct](ctx, nil, "https://api.example.com/data", nil, body, "json")
+
+// Stream（caller 自負 defer resp.Body.Close()）
+resp, err := http.GETStream(ctx, nil, "https://api.example.com/sse", map[string]string{
+    "Accept": "text/event-stream, application/json",
+})
+if err != nil {
+    return err
+}
+defer resp.Body.Close()
+
+sessionID := resp.Header.Get("Mcp-Session-Id")
+switch ct := resp.Header.Get("Content-Type"); {
+case strings.HasPrefix(ct, "text/event-stream"):
+    // 逐行讀取 SSE
+case strings.HasPrefix(ct, "application/json"):
+    _ = json.NewDecoder(resp.Body).Decode(&result)
+}
+
+// POST/PUT/PATCH/DELETEStream 簽名與非 stream 版相同
+resp, err = http.POSTStream(ctx, nil, "https://api.example.com/mcp", header, body, "json")
 ```
 
 </details>
