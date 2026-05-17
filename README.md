@@ -263,7 +263,7 @@ for _, h := range hits {
 
 ### filesystem/parser
 
-多格式文件抽取：Markdown / PDF / DOCX / PPTX 統一回 `(string, []Chunk, error)` — 第一個 string 為全文、第二個為段落分塊。每個 `Chunk` 保留 `Source` / `Index` / `Total` / `Content`，超過 65535 rune 的段落自動以句末標點切片（中英標點皆認）。空文件回 `parser.ErrEmpty` sentinel，可用 `errors.Is` 判斷。
+多格式文件抽取：Markdown / PDF / DOCX / PPTX 統一回 `(string, []Chunk, error)` — 第一個 string 為全文、第二個為段落分塊。每個 `Chunk` 保留 `Source` / `Index` / `Total` / `Content`，超過 65535 rune 的段落自動以句末標點切片（中英標點皆認）。空文件回 `parser.ErrEmpty` sentinel，可用 `errors.Is` 判斷。`Image` / `CSV` / `XLSX` 為例外，回 `(string, error)`：`Image` 吐 `data:image/jpeg;base64,...` data URL；`CSV` / `XLSX` 吐 `[][]string` JSON（header + 資料列）。
 
 | API | 後端 |
 |---|---|
@@ -271,6 +271,9 @@ for _, h := range hits {
 | `PDF(ctx, path)` | `pdftotext -layout` CLI（需先安裝 poppler-utils），以 `\f` 分頁 |
 | `Docx(ctx, path)` | `archive/zip` + `encoding/xml`，涵蓋 `word/document.xml` 主文與 `header*` / `footer*` / `footnotes` / `endnotes` |
 | `PPTX(ctx, path)` | `archive/zip` + `encoding/xml`，按 `slide(N).xml` 數字排序 |
+| `Image(ctx, path)` | `image.Decode`（支援 JPEG / PNG / GIF）後以 quality 85 轉 JPEG，輸出 base64 data URL |
+| `CSV(ctx, path, offset, limit)` | `encoding/csv` 讀首列為 header；`.tsv` 自動換 `\t` delimiter；BOM 自動剝除；1MB 上限；`offset` 為 1-indexed 起始資料列，輸出 header + 切片資料列為 `[][]string` JSON |
+| `XLSX(ctx, path, offset, limit)` | `archive/zip` + `encoding/xml` 解 OOXML；讀 `xl/sharedStrings.xml` 還原 SST、`xl/worksheets/sheet1.xml` 為首工作表；支援 `s` / `inlineStr` / `b` / 數字 cell；按 cell `r` 屬性補欄位空缺；輸出格式與 `CSV` 同 |
 
 <details>
 <summary>範例</summary>
@@ -285,6 +288,10 @@ text, chunks, err := parser.Markdown(ctx, "./README.md")
 text, chunks, err = parser.PDF(ctx, "./paper.pdf")
 text, chunks, err = parser.Docx(ctx, "./report.docx")
 text, chunks, err = parser.PPTX(ctx, "./slides.pptx")
+
+dataURL, err := parser.Image(ctx, "./cover.png")        // data:image/jpeg;base64,...
+rowsJSON, err := parser.CSV(ctx, "./data.csv", 1, 50)   // [["col1","col2"],["a","b"],...]
+rowsJSON, err = parser.XLSX(ctx, "./data.xlsx", 1, 50)  // first sheet, same shape as CSV
 
 if errors.Is(err, parser.ErrEmpty) {
     // 解析成功但內容為空（text 仍可能非空）
