@@ -58,7 +58,9 @@ func HTMLToMarkdown(content, baseURL string, keepLinks bool) (string, error) {
 
 		case "h1", "h2", "h3", "h4", "h5", "h6":
 			level := int(tag[1] - '0')
-			sb.WriteString("\n" + strings.Repeat("#", level) + " ")
+			sb.WriteString("\n")
+			sb.WriteString(strings.Repeat("#", level))
+			sb.WriteString(" ")
 			for c := n.FirstChild; c != nil; c = c.NextSibling {
 				walk(c)
 			}
@@ -98,6 +100,18 @@ func HTMLToMarkdown(content, baseURL string, keepLinks bool) (string, error) {
 				walk(c)
 			}
 			sb.WriteString("*")
+			return
+
+		case "time":
+			if dt := attrMap(n)["datetime"]; dt != "" {
+				sb.WriteString(" [")
+				sb.WriteString(dt)
+				sb.WriteString("] ")
+				return
+			}
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				walk(c)
+			}
 			return
 
 		case "a":

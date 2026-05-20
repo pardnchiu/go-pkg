@@ -3,7 +3,9 @@ package rod
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
+	"math/rand/v2"
 	"net/url"
 	"strings"
 	"time"
@@ -12,6 +14,14 @@ import (
 	"github.com/go-rod/rod/lib/proto"
 	readability "github.com/go-shiori/go-readability"
 )
+
+const (
+	TypeMarkdown = iota
+	TypeHTML
+	TypeJSON
+)
+
+const defaultScrollCount = 3
 
 //go:embed embed/stealth.js
 var defaultStealthJS string
@@ -26,19 +36,23 @@ type Viewport struct {
 }
 
 type FetchOption struct {
-	IdleWait  time.Duration
-	MaxLength int
-	UserAgent string
-	KeepLinks bool
-	StealthJS string
-	SettleJS  string
-	Viewport  *Viewport
+	IdleWait    time.Duration
+	MaxLength   int
+	UserAgent   string
+	KeepLinks   bool
+	StealthJS   string
+	SettleJS    string
+	Viewport    *Viewport
+	SameSession bool
+	Profile     string
+	Type        int
+	ScrollCount int
 }
 
 type FetchResult struct {
 	Href        string
 	FinalURL    string
-	Markdown    string
+	Content     string
 	Title       string
 	Author      string
 	PublishedAt string
@@ -80,6 +94,12 @@ func prepareOpt(opt *FetchOption) *FetchOption {
 	if o.Viewport == nil {
 		o.Viewport = &Viewport{Width: 1280, Height: 960}
 	}
+	if o.Profile == "" {
+		o.Profile = "Default"
+	}
+	if o.ScrollCount == 0 {
+		o.ScrollCount = defaultScrollCount
+	}
 	return &o
 }
 
@@ -101,28 +121,20 @@ func Fetch(ctx context.Context, href string, timeout time.Duration, opt *FetchOp
 		return nil, err
 	}
 
+	if o.SameSession {
+		b, cleanup, err := launchWithSnapshot(ctx, o.Profile, o.UserAgent, !hasDisplay())
+		if err != nil {
+			return nil, err
+		}
+		defer cleanup()
+		return load(ctx, b, href, parsed, timeout, o)
+	}
+
 	b, err := ensureBrowser(o.UserAgent, !hasDisplay())
 	if err != nil {
 		return nil, err
 	}
 	return load(ctx, b, href, parsed, timeout, o)
-}
-
-func FetchWS(ctx context.Context, controlURL, href string, timeout time.Duration, opt *FetchOption) (*FetchResult, error) {
-	o := prepareOpt(opt)
-	parsed, err := parseHref(href)
-	if err != nil {
-		return nil, err
-	}
-	b, err := ensureBrowserWS(controlURL)
-	if err != nil {
-		return nil, err
-	}
-	r, err := load(ctx, b, href, parsed, timeout, o)
-	if err != nil && strings.Contains(err.Error(), "browser.Page") {
-		resetBrowserWS(controlURL)
-	}
-	return r, err
 }
 
 func load(ctx context.Context, b *rod.Browser, href string, parsed *url.URL, timeout time.Duration, opt *FetchOption) (*FetchResult, error) {
@@ -216,9 +228,31 @@ func load(ctx context.Context, b *rod.Browser, href string, parsed *url.URL, tim
 		settleCancel()
 	}
 
+scrollLoop:
+	for i := 0; i < opt.ScrollCount; i++ {
+		_, _ = page.Eval(`() => window.scrollTo(0, document.body.scrollHeight)`)
+		delay := time.Duration(1+rand.IntN(5)) * time.Second
+		select {
+		case <-ctx.Done():
+			break scrollLoop
+		case <-time.After(delay):
+		}
+	}
+
+	_, _ = page.Eval(`() => document.querySelectorAll('time[datetime]').forEach(t => { const n = document.createTextNode(' [' + t.getAttribute('datetime') + '] '); t.parentNode.replaceChild(n, t) })`)
+
 	htmlSrc, err := page.HTML()
 	if err != nil {
 		return nil, fmt.Errorf("page.HTML: %w", err)
+	}
+
+	if opt.Type == TypeHTML {
+		return &FetchResult{
+			Href:     href,
+			FinalURL: finalURL,
+			Content:  htmlSrc,
+			Status:   status,
+		}, nil
 	}
 
 	article, err := readability.FromReader(strings.NewReader(htmlSrc), parsed)
@@ -251,7 +285,7 @@ func load(ctx context.Context, b *rod.Browser, href string, parsed *url.URL, tim
 	result := &FetchResult{
 		Href:     href,
 		FinalURL: finalURL,
-		Markdown: md,
+		Content:  md,
 		Title:    article.Title,
 		Author:   article.Byline,
 		Excerpt:  article.Excerpt,
@@ -259,6 +293,19 @@ func load(ctx context.Context, b *rod.Browser, href string, parsed *url.URL, tim
 	}
 	if article.PublishedTime != nil {
 		result.PublishedAt = article.PublishedTime.Format(time.RFC3339)
+	}
+
+	if opt.Type == TypeJSON {
+		b, err := json.Marshal(result)
+		if err != nil {
+			return nil, fmt.Errorf("marshal json: %w", err)
+		}
+		return &FetchResult{
+			Href:     href,
+			FinalURL: finalURL,
+			Content:  string(b),
+			Status:   status,
+		}, nil
 	}
 	return result, nil
 }
