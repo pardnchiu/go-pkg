@@ -80,65 +80,15 @@ err := database.PostgresqlMigrate(ctx, db, "./migrations")
 
 </details>
 
-### rod
+### rod（v0.13.0 起移除）
 
-go-rod 打包：Chromium 抓取網頁，以 readability 擷取主文，輸出 `*FetchResult`（含 `Href` / `FinalURL` / `Content` / `Title` / `Author` / `PublishedAt` / `Excerpt` / `Status`）。`Content` 依 `FetchOption.Type` 為 markdown（預設）/ raw HTML / JSON 字串。內含 HTML→Markdown 轉換與跨平台 Chrome 偵測。`Fetch` 可併發呼叫，共用單一 browser 並各自開獨立 tab；全域併發上限預設 8，可透過 `SetMaxConcurrency(n)` 調整。
-
-`Fetch` 將整體 timeout 提升為函式參數（caller 自填，傳 `0` 表示不套 timeout，僅吃 parent ctx）；其餘參數（`IdleWait` / `MaxLength` / `Viewport` 等）仍透過 `FetchOption` 覆寫。載入策略：`WaitLoad` → `WaitDOMStable(IdleWait, 0.01)` → SettleJS → **scroll-to-bottom ×3（每次 1-5s 隨機間隔）** → **`<time>` element → text node 替換**（保留 ISO timestamp 不被 readability 過濾）→ `page.HTML`。`WaitDOMStable` 等 DOM 連續 `IdleWait` 秒內變動 ≤ 1% 即返回，不等網路 idle、不被 GA／廣告 beacon 拖住。scroll-to-bottom 觸發 SPA timeline / feed 的 lazy-load 內容（如 X profile），隨機間隔避免固定節奏觸發 anti-bot；scroll 期望值約 9s，caller 設 `timeout` 須預留 ≥ 25s。`<time datetime="...">2h</time>` 被替換成 `[2026-04-30T15:19:21.000Z]` 純文字，否則 readability 會把整個 `<time>` 元素剝掉導致 timestamp 在 markdown 中遺失。內建 stealth.js 注入（抗爬蟲偵測）、page-level viewport（預設 1280×960）。`KeepLinks=false`（預設）為純文字模式，剝除 `nav` / `header` / `footer` / `aside` / `img` / `a`；`KeepLinks=true` 輸出完整 markdown。
-
-`Fetch` 依環境自動選模式：有 display 時使用 headful（視窗以 off-screen position 隱藏），無 display 時使用 headless。Browser instance 常駐複用，閒置 5 分鐘自動關閉釋放資源。
-
-`SameSession=true` 啟用 cookie 自解＋CDP 注入模式（**Darwin / Linux**）：抓取前複製真人 Chrome `<Profile>/{Cookies,Cookies-wal,Cookies-shm}` 到 tmpDir（避免 race source DB 寫入）；從 platform-native credential store 抓 `Chrome Safe Storage` master password（macOS `security` CLI / Linux `secret-tool`）→ PBKDF2-SHA1 derive AES-128 key → 解 Cookies DB 內 `v10`-prefix cookie；Chrome M126+ cookie plaintext 結構為 `SHA256(host_key) || actual_value`，解密後 strip 前 32 byte 取真正 value；再用 CDP `Network.setCookies` 注入到獨立 browser instance（fresh UserDataDir，不繼承 Local Storage / Preferences）；跑完即關並清理 tmpdir，**不快取**，下次呼叫拿最新 cookie。
-
-不靠 Chrome 自身的 keychain 互動，因為 `go-rod` launcher 預設帶 `--use-mock-keychain` + `--password-store=basic`，新 instance 不會去 Keychain 取 master key → 自解 + CDP 注入是 macOS 上唯一可靠路徑。額外啟動 flags：`--disable-sync` / `--no-first-run` / `--no-default-browser-check` / `--disable-background-networking`。macOS 首次跑會彈系統級 Keychain 授權對話框，點「永遠允許」一次後續免。
-
-多 profile 使用者透過 `Profile` 指定 source profile 名（如 `"Profile 1"`），預設 `"Default"`；確認方式：`sqlite3 "~/Library/Application Support/Google/Chrome/<name>/Cookies" "SELECT DISTINCT host_key FROM cookies WHERE host_key LIKE '%<target-domain>%'"` 看哪個 profile 含目標 domain cookie。
-
-遇到 HTTP 錯誤、空內容、challenge page（Cloudflare 等）時，error 為 `*FetchError{Status, Href}`，`Status` 可能為 4xx/5xx、`204`（空內容）或 `403`（challenge / URL heuristic），可用 `errors.As` 分流。
-
-<details>
-<summary>範例</summary>
+瀏覽器抓取與互動操作自 **v0.13.0** 起獨立至 [`github.com/pardnchiu/go-browser`](https://github.com/pardnchiu/go-browser) 維護，本套件不再提供 `rod` 子套件。請改用：
 
 ```go
-import "github.com/pardnchiu/go-pkg/rod"
-
-defer rod.Close()
-
-result, err := rod.Fetch(ctx, "https://example.com/article", 30*time.Second, nil)
-// result.Href / result.FinalURL / result.Title / result.Author / result.PublishedAt / result.Excerpt / result.Status / result.Content
+import "github.com/pardnchiu/go-browser"
 ```
 
-```go
-result, err := rod.Fetch(ctx, "https://example.com/article", 20*time.Second, &rod.FetchOption{
-	IdleWait:  2 * time.Second,
-	MaxLength: 50 << 10,
-	KeepLinks: true,
-	Viewport:  &rod.Viewport{Width: 1920, Height: 1080, DeviceScaleFactor: 1},
-})
-
-// 共用真人 Chrome 登入 session（profile snapshot + cookie 注入，Darwin / Linux）
-result, err = rod.Fetch(ctx, "https://x.com/home", 30*time.Second, &rod.FetchOption{
-	SameSession: true,
-	Profile:     "Profile 1", // 預設 "Default"；多 profile 使用者指定登入該服務的 profile
-})
-
-// 切換輸出格式 / 自訂 scroll 次數
-result, err = rod.Fetch(ctx, "https://example.com", 30*time.Second, &rod.FetchOption{
-	Type:        rod.TypeJSON, // TypeMarkdown(0) / TypeHTML(1) / TypeJSON(2)
-	ScrollCount: 5,             // 0 = default(3)；<0 = 不滾
-})
-
-// HTTP 錯誤分流
-var fe *rod.FetchError
-if errors.As(err, &fe) {
-	_ = fe.Status // 404 / 503 / ...
-}
-
-// 單獨使用 HTML→Markdown
-out, err := rod.HTMLToMarkdown(htmlFragment, baseURL, true) // keepLinks=true
-```
-
-</details>
+歷史版本（≤ v0.12.x）仍可透過 `github.com/pardnchiu/go-pkg/rod` 取得；新專案請直接相依 `go-browser`。
 
 ### filesystem
 
