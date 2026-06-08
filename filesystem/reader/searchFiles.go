@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -47,7 +46,6 @@ func SearchFiles(root, namePattern string, filePatterns []string, maxSize int64,
 	err = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			if opt.IgnoreWalkError {
-				slog.Warn("filepath.WalkDir", slog.String("error", err.Error()))
 				return nil
 			}
 			return err
@@ -66,6 +64,9 @@ func SearchFiles(root, namePattern string, filePatterns []string, maxSize int64,
 		}
 
 		if d.IsDir() {
+			if opt.SkipDenied && filesystem.IsDenied(path) {
+				return filepath.SkipDir
+			}
 			if opt.SkipExcluded {
 				abs, err := filepath.Abs(path)
 				if err != nil {

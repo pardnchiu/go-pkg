@@ -7,6 +7,7 @@ import (
 
 type ListOption struct {
 	SkipExcluded      bool
+	SkipDenied        bool
 	IgnoreWalkError   bool
 	IncludeNonRegular bool
 }

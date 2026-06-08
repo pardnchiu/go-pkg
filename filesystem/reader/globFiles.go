@@ -27,6 +27,7 @@ func GlobFiles(root, namePattern string) ([]File, error) {
 		}
 		walked, err := WalkFiles(root, ListOption{
 			SkipExcluded:      true,
+			SkipDenied:        true,
 			IgnoreWalkError:   true,
 			IncludeNonRegular: true,
 		})

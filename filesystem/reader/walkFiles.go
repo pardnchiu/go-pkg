@@ -35,6 +35,9 @@ func WalkFiles(root string, opts ...ListOption) ([]File, error) {
 			if strings.HasPrefix(entry.Name(), ".") {
 				return filepath.SkipDir
 			}
+			if opt.SkipDenied && filesystem.IsDenied(path) {
+				return filepath.SkipDir
+			}
 			if opt.SkipExcluded {
 				abs, err := filepath.Abs(path)
 				if err != nil {
