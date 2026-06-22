@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -31,6 +32,11 @@ func GET[T any](ctx context.Context, client *http.Client, api string, header map
 	defer resp.Body.Close()
 
 	statusCode := resp.StatusCode
+
+	if statusCode < 200 || statusCode >= 400 {
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
+		return result, statusCode, fmt.Errorf("HTTP %d: %s", statusCode, strings.TrimSpace(string(raw)))
+	}
 
 	if s, ok := any(&result).(*string); ok {
 		b, err := io.ReadAll(resp.Body)

@@ -76,9 +76,9 @@ func send[T any](ctx context.Context, client *http.Client, method, api string, h
 
 	statusCode := resp.StatusCode
 
-	if statusCode < 200 || statusCode >= 300 {
-		b, _ := io.ReadAll(resp.Body)
-		return result, statusCode, fmt.Errorf("HTTP %d: %s", statusCode, strings.TrimSpace(string(b)))
+	if statusCode < 200 || statusCode >= 400 {
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
+		return result, statusCode, fmt.Errorf("HTTP %d: %s", statusCode, strings.TrimSpace(string(raw)))
 	}
 
 	if s, ok := any(&result).(*string); ok {
