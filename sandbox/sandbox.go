@@ -54,11 +54,20 @@ type BindSpec struct {
 }
 
 type Option struct {
+	AllowAll     bool
 	CPUPercent   int
 	MemoryMB     int
 	Network      NetworkMode
 	DropCaps     bool
 	MinimalBinds *BindSpec
+}
+
+func resolveDir(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("filepath.Abs: %w", err)
+	}
+	return abs, nil
 }
 
 var minimalRoBinds = []string{

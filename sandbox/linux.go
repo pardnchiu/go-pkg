@@ -176,6 +176,33 @@ func Wrap(ctx context.Context, binary string, args []string, workDir string, opt
 		return nil, fmt.Errorf("negative limit: cpu=%d mem=%d", opt.CPUPercent, opt.MemoryMB)
 	}
 
+	if opt.AllowAll {
+		absDir, err := resolveDir(workDir)
+		if err != nil {
+			return nil, err
+		}
+		if opt.CPUPercent > 0 || opt.MemoryMB > 0 {
+			if !checkBinary("systemd-run") {
+				return nil, fmt.Errorf("systemd-run required for CPU/Memory limits (needs a running user systemd session)")
+			}
+			sdArgs := []string{"--user", "--scope", "--collect"}
+			if opt.MemoryMB > 0 {
+				sdArgs = append(sdArgs, fmt.Sprintf("--property=MemoryMax=%dM", opt.MemoryMB))
+			}
+			if opt.CPUPercent > 0 {
+				sdArgs = append(sdArgs, fmt.Sprintf("--property=CPUQuota=%d%%", opt.CPUPercent))
+			}
+			sdArgs = append(sdArgs, binary)
+			sdArgs = append(sdArgs, args...)
+			cmd := exec.CommandContext(ctx, "systemd-run", sdArgs...)
+			cmd.Dir = absDir
+			return cmd, nil
+		}
+		cmd := exec.CommandContext(ctx, binary, args...)
+		cmd.Dir = absDir
+		return cmd, nil
+	}
+
 	homeDir, absWorkDir, err := validateDir(workDir)
 	if err != nil {
 		return nil, err
