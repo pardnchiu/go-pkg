@@ -109,6 +109,8 @@ func SearchFiles(root, namePattern string, filePatterns []string, maxSize int64,
 		}
 
 		var matches []Line
+		var before []Line
+		after := 0
 		scanner := bufio.NewScanner(bytes.NewReader(data))
 		scanner.Buffer(make([]byte, 0, 64*1024), len(data))
 		lineNum := 0
@@ -116,7 +118,22 @@ func SearchFiles(root, namePattern string, filePatterns []string, maxSize int64,
 			lineNum++
 			line := scanner.Text()
 			if regex.MatchString(line) {
+				matches = append(matches, before...)
+				before = before[:0]
 				matches = append(matches, Line{Line: lineNum, Text: line})
+				after = opt.Context
+				continue
+			}
+			if after > 0 {
+				matches = append(matches, Line{Line: lineNum, Text: line, Context: true})
+				after--
+				continue
+			}
+			if opt.Context > 0 {
+				before = append(before, Line{Line: lineNum, Text: line, Context: true})
+				if len(before) > opt.Context {
+					before = before[1:]
+				}
 			}
 		}
 		if len(matches) > 0 {

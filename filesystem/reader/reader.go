@@ -11,6 +11,7 @@ type ListOption struct {
 	SkipDenied        bool
 	IgnoreWalkError   bool
 	IncludeNonRegular bool
+	Context           int
 }
 
 func getListOption(opts []ListOption) ListOption {
@@ -30,8 +31,9 @@ type File struct {
 }
 
 type Line struct {
-	Line int    `json:"line"`
-	Text string `json:"text"`
+	Line    int    `json:"line"`
+	Text    string `json:"text"`
+	Context bool   `json:"context,omitempty"`
 }
 
 func newFile(path string, info os.FileInfo) File {
