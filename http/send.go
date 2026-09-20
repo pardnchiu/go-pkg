@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 )
 
@@ -33,31 +32,16 @@ func send[T any](ctx context.Context, client *http.Client, method, api string, h
 		contentType = "json"
 	}
 
-	var req *http.Request
-	var err error
-	if contentType == "form" {
-		requestBody := url.Values{}
-		for k, v := range body {
-			requestBody.Set(k, fmt.Sprint(v))
-		}
-
-		req, err = http.NewRequestWithContext(ctx, method, api, strings.NewReader(requestBody.Encode()))
-		if err != nil {
-			return result, 0, err
-		}
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	} else {
-		requestBody, err := json.Marshal(body)
-		if err != nil {
-			return result, 0, fmt.Errorf("failed to marshal body: %w", err)
-		}
-
-		req, err = http.NewRequestWithContext(ctx, method, api, strings.NewReader(string(requestBody)))
-		if err != nil {
-			return result, 0, fmt.Errorf("failed to create request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
+	requestBody, requestType, err := buildBody(body, contentType)
+	if err != nil {
+		return result, 0, err
 	}
+
+	req, err := http.NewRequestWithContext(ctx, method, api, requestBody)
+	if err != nil {
+		return result, 0, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", requestType)
 
 	req.Header.Set("Accept", "application/json")
 
