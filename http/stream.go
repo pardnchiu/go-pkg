@@ -2,11 +2,8 @@ package http
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
-	"strings"
 )
 
 func GETStream(ctx context.Context, client *http.Client, api string, header map[string]string) (*http.Response, error) {
@@ -46,29 +43,16 @@ func sendStream(ctx context.Context, client *http.Client, method, api string, he
 		contentType = "json"
 	}
 
-	var req *http.Request
-	var err error
-	if contentType == "form" {
-		requestBody := url.Values{}
-		for k, v := range body {
-			requestBody.Set(k, fmt.Sprint(v))
-		}
-		req, err = http.NewRequestWithContext(ctx, method, api, strings.NewReader(requestBody.Encode()))
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	} else {
-		requestBody, err := json.Marshal(body)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal body: %w", err)
-		}
-		req, err = http.NewRequestWithContext(ctx, method, api, strings.NewReader(string(requestBody)))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
+	requestBody, requestType, err := buildBody(body, contentType)
+	if err != nil {
+		return nil, err
 	}
+
+	req, err := http.NewRequestWithContext(ctx, method, api, requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", requestType)
 
 	for k, v := range header {
 		req.Header.Set(k, v)
