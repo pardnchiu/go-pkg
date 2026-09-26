@@ -12,6 +12,7 @@ type ListOption struct {
 	IgnoreWalkError   bool
 	IncludeNonRegular bool
 	Context           int
+	Multiline         bool
 }
 
 func getListOption(opts []ListOption) ListOption {
