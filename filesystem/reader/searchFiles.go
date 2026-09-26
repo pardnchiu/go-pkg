@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/pardnchiu/go-pkg/filesystem"
@@ -26,7 +27,13 @@ var binaryExts = map[string]bool{
 func SearchFiles(root, namePattern string, filePatterns []string, maxSize int64, opts ...ListOption) ([]File, error) {
 	root = utils.AbsPath("", root)
 
-	regex, err := regexp.Compile(namePattern)
+	opt := getListOption(opts)
+
+	pattern := namePattern
+	if opt.Multiline {
+		pattern = "(?ms)" + namePattern
+	}
+	regex, err := regexp.Compile(pattern)
 	if err != nil {
 		return nil, fmt.Errorf("regexp.Compile: %w", err)
 	}
@@ -34,8 +41,6 @@ func SearchFiles(root, namePattern string, filePatterns []string, maxSize int64,
 	if maxSize <= 0 {
 		maxSize = 1 << 20
 	}
-
-	opt := getListOption(opts)
 
 	var results []File
 	err = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
@@ -108,6 +113,14 @@ func SearchFiles(root, namePattern string, filePatterns []string, maxSize int64,
 			return nil
 		}
 
+		var lineHit map[int]bool
+		if opt.Multiline {
+			lineHit = matchedLines(regex, data)
+			if len(lineHit) == 0 {
+				return nil
+			}
+		}
+
 		var matches []Line
 		var before []Line
 		after := 0
@@ -117,7 +130,11 @@ func SearchFiles(root, namePattern string, filePatterns []string, maxSize int64,
 		for scanner.Scan() {
 			lineNum++
 			line := scanner.Text()
-			if regex.MatchString(line) {
+			hit := lineHit[lineNum]
+			if !opt.Multiline {
+				hit = regex.MatchString(line)
+			}
+			if hit {
 				matches = append(matches, before...)
 				before = before[:0]
 				matches = append(matches, Line{Line: lineNum, Text: line})
@@ -144,4 +161,26 @@ func SearchFiles(root, namePattern string, filePatterns []string, maxSize int64,
 		return nil
 	})
 	return results, err
+}
+
+func matchedLines(regex *regexp.Regexp, data []byte) map[int]bool {
+	var breaks []int
+	for i, b := range data {
+		if b == '\n' {
+			breaks = append(breaks, i)
+		}
+	}
+	lineOf := func(pos int) int {
+		n, _ := slices.BinarySearch(breaks, pos)
+		return n + 1
+	}
+
+	lineHit := make(map[int]bool)
+	for _, loc := range regex.FindAllIndex(data, -1) {
+		last := max(loc[1]-1, loc[0])
+		for n := lineOf(loc[0]); n <= lineOf(last); n++ {
+			lineHit[n] = true
+		}
+	}
+	return lineHit
 }
