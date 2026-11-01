@@ -110,7 +110,7 @@ func seatbeltProfile(home, workDir string, opt *Option) string {
 `, writeRoot, extraWrites.String(), tempWrites.String(), keychainDir, keychainDir, deny.String(), networkRule)
 }
 
-func Wrap(ctx context.Context, binary string, args []string, workDir string, opt *Option) (*exec.Cmd, error) {
+func wrap(ctx context.Context, binary string, args []string, workDir string, opt *Option) (*exec.Cmd, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("ctx is nil")
 	}
