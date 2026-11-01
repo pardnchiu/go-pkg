@@ -29,3 +29,14 @@ func Wrap(ctx context.Context, binary string, args []string, workDir string, opt
 	cmd.WaitDelay = killWaitDelay
 	return cmd, nil
 }
+
+func Run(cmd *exec.Cmd) error {
+	err := cmd.Run()
+	if cmd.Process != nil {
+		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
+	if errors.Is(err, exec.ErrWaitDelay) && cmd.ProcessState != nil && cmd.ProcessState.Success() {
+		return nil
+	}
+	return err
+}
