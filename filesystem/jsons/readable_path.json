@@ -1,0 +1,22 @@
+[
+  "/usr",
+  "/bin",
+  "/sbin",
+  "/lib",
+  "/lib32",
+  "/lib64",
+  "/libx32",
+  "/opt",
+  "/snap",
+  "/etc",
+  "/srv",
+  "/var/lib/dpkg",
+  "/var/lib/rpm",
+  "/var/lib/pacman",
+  "/Applications",
+  "/System/Library",
+  "/System/Applications",
+  "/Library",
+  "/Users/Shared",
+  "/dev/null"
+]
