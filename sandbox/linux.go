@@ -90,7 +90,7 @@ func buildBwrapArgs(homeDir, workDir string, opt *Option) []string {
 	var args []string
 
 	if opt.MinimalBinds != nil {
-		for _, p := range filesystem.ReadableRoots {
+		for _, p := range filesystem.ReadablePaths {
 			args = append(args, "--ro-bind-try", p, p)
 		}
 		for _, p := range resolveBinds(opt.MinimalBinds.ReadOnly) {
