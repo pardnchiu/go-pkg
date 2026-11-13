@@ -91,17 +91,6 @@ func resolveBinds(list []string) []string {
 	return out
 }
 
-var minimalRoBinds = []string{
-	"/usr",
-	"/etc",
-	"/bin",
-	"/sbin",
-	"/lib",
-	"/lib32",
-	"/lib64",
-	"/opt",
-}
-
 var (
 	cachedDenied deniedMap
 	newOnce      sync.Once

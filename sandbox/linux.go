@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+
+	"github.com/pardnchiu/go-pkg/filesystem"
 )
 
 // * if is nil, then install bubblewrap first
@@ -88,7 +90,7 @@ func buildBwrapArgs(homeDir, workDir string, opt *Option) []string {
 	var args []string
 
 	if opt.MinimalBinds != nil {
-		for _, p := range minimalRoBinds {
+		for _, p := range filesystem.ReadableRoots {
 			args = append(args, "--ro-bind-try", p, p)
 		}
 		for _, p := range resolveBinds(opt.MinimalBinds.ReadOnly) {
