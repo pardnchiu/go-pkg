@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,8 +32,11 @@ func validateDir(path string) (home, workDir string, err error) {
 }
 
 type deniedMap struct {
-	Dirs  []string `json:"dirs"`
-	Files []string `json:"files"`
+	Dirs          []string `json:"dirs"`
+	Files         []string `json:"files"`
+	ReadOnlyDirs  []string `json:"readonly_dirs"`
+	ReadOnlyFiles []string `json:"readonly_files"`
+	WritableDirs  []string `json:"writable_dirs"`
 }
 
 type NetworkMode int
@@ -114,6 +118,46 @@ func deniedPaths(homeDir string) (dirs []string, files []string) {
 		}
 	}
 	return
+}
+
+func readOnlyPaths(homeDir string) (dirs []string, files []string) {
+	for _, d := range cachedDenied.ReadOnlyDirs {
+		if one := resolveDenied(homeDir, d); one != "" {
+			dirs = append(dirs, one)
+		}
+	}
+	for _, f := range cachedDenied.ReadOnlyFiles {
+		if one := resolveDenied(homeDir, f); one != "" {
+			files = append(files, one)
+		}
+	}
+	return
+}
+
+type writeLayer struct {
+	path     string
+	file     bool
+	writable bool
+}
+
+func writeLayers(homeDir string) []writeLayer {
+	readOnlyDirs, readOnlyFiles := readOnlyPaths(homeDir)
+	var layers []writeLayer
+	for _, d := range readOnlyDirs {
+		layers = append(layers, writeLayer{path: d})
+	}
+	for _, f := range readOnlyFiles {
+		layers = append(layers, writeLayer{path: f, file: true})
+	}
+	for _, d := range cachedDenied.WritableDirs {
+		if one := resolveDenied(homeDir, d); one != "" {
+			layers = append(layers, writeLayer{path: one, writable: true})
+		}
+	}
+	sort.SliceStable(layers, func(i, j int) bool {
+		return strings.Count(layers[i].path, string(filepath.Separator)) < strings.Count(layers[j].path, string(filepath.Separator))
+	})
+	return layers
 }
 
 func resolveDenied(homeDir, entry string) string {
