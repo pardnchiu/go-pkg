@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"sync"
 
@@ -131,6 +132,7 @@ func buildBwrapArgs(homeDir, workDir string, opt *Option) []string {
 	}
 
 	deniedDirs, deniedFiles := deniedPaths(homeDir)
+	layers := writeLayers(homeDir)
 	if opt.MinimalBinds != nil {
 		writeRoot := workDir
 		if opt.MinimalBinds.WriteScope == WriteHome {
@@ -147,6 +149,16 @@ func buildBwrapArgs(homeDir, workDir string, opt *Option) []string {
 		}
 		deniedDirs = filterVisible(deniedDirs, isVisible)
 		deniedFiles = filterVisible(deniedFiles, isVisible)
+		layers = slices.DeleteFunc(layers, func(layer writeLayer) bool {
+			return !isVisible(layer.path)
+		})
+	}
+	for _, layer := range layers {
+		flag := "--ro-bind-try"
+		if layer.writable {
+			flag = "--bind-try"
+		}
+		args = append(args, flag, layer.path, layer.path)
 	}
 	for _, d := range deniedDirs {
 		args = append(args, "--tmpfs", d)

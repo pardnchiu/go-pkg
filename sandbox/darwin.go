@@ -43,6 +43,16 @@ func seatbeltProfile(home, workDir string, opt *Option) string {
 	deniedDirs, deniedFiles := deniedPaths(home)
 
 	var deny strings.Builder
+	for _, layer := range writeLayers(home) {
+		action, filter := "deny", "subpath"
+		if layer.writable {
+			action = "allow"
+		}
+		if layer.file {
+			filter = "literal"
+		}
+		fmt.Fprintf(&deny, "(%s file-write* (%s %q))\n", action, filter, layer.path)
+	}
 	for _, d := range deniedDirs {
 		fmt.Fprintf(&deny, "(deny file-read* (subpath %q))\n", d)
 		fmt.Fprintf(&deny, "(deny file-write* (subpath %q))\n", d)
